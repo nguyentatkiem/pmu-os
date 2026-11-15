@@ -26,10 +26,11 @@ import {
   UserRound,
   Users,
   ChevronDown,
+  KeyRound,
   Image as ImageIcon,
 } from "lucide-react";
 import { api, setApiBranch } from "@/lib/client/api";
-import { AppCtx, Avatar, Modal, type Me, useToast, PageSkeleton, useApp } from "./ui";
+import { AppCtx, Avatar, Field, Modal, type Me, useToast, PageSkeleton, useApp } from "./ui";
 import { fmtDateTime } from "@/lib/shared/format";
 
 const NAV: { href: string; label: string; icon: React.ElementType; show: (me: Me, can: (p: string) => boolean) => boolean }[] = [
@@ -180,6 +181,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
     const [menu, setMenu] = useState<"" | "user" | "bell">("");
     const [search, setSearch] = useState(false);
     const [help, setHelp] = useState(false);
+    const [pw, setPw] = useState(false);
     const [notes, setNotes] = useState<any[] | null>(null);
     const toast = useToast();
     const ref = useRef<HTMLDivElement>(null);
@@ -311,6 +313,11 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
               <Link className="menu-item" href="/thiet-ke" onClick={() => setMenu("")}>
                 <ImageIcon size={18} /> Bộ thiết kế gốc (16 màn hình)
               </Link>
+              {m.tenant.mode === "REAL" && m.user.id === m.login_user_id && (
+                <button className="menu-item" onClick={() => (setMenu(""), setPw(true))}>
+                  <KeyRound size={18} /> Đổi mật khẩu
+                </button>
+              )}
               <button
                 className="menu-item"
                 onClick={async () => {
@@ -325,6 +332,7 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
         </div>
         {search && <SearchModal onClose={() => setSearch(false)} />}
         {help && <HelpModal onClose={() => setHelp(false)} />}
+        {pw && <PasswordModal onClose={() => setPw(false)} />}
       </header>
     );
   }
@@ -394,6 +402,60 @@ function HelpModal({ onClose }: { onClose: () => void }) {
         <div>
           <b>Phím tắt:</b> Ctrl/⌘ + K để tìm kiếm. Esc để đóng cửa sổ.
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+function PasswordModal({ onClose }: { onClose: () => void }) {
+  const [f, setF] = useState({ current: "", next: "", confirm: "" });
+  const [err, setErr] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+  return (
+    <Modal
+      title="Đổi mật khẩu"
+      onClose={onClose}
+      dirty={!!(f.current || f.next)}
+      footer={
+        <>
+          <button className="btn btn-outline" onClick={onClose}>
+            Hủy
+          </button>
+          <button
+            className="btn btn-primary"
+            disabled={busy}
+            onClick={async () => {
+              if (f.next !== f.confirm) return setErr({ field_errors: { confirm: "Mật khẩu nhập lại không khớp" } });
+              setBusy(true);
+              setErr(null);
+              try {
+                const r = await api("/auth/change-password", { body: { current: f.current, next: f.next } });
+                toast("ok", r.message);
+                onClose();
+              } catch (e) {
+                setErr(e);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {busy ? "Đang lưu..." : "Lưu mật khẩu mới"}
+          </button>
+        </>
+      }
+    >
+      {err && !err.field_errors && <div className="banner danger mb-16">{err.message}</div>}
+      <div className="stack" style={{ gap: 12 }}>
+        <Field label="Mật khẩu hiện tại" req error={err?.field_errors?.current}>
+          <input className="input" type="password" autoComplete="current-password" value={f.current} onChange={(e) => setF({ ...f, current: e.target.value })} />
+        </Field>
+        <Field label="Mật khẩu mới" req error={err?.field_errors?.next} hint="Tối thiểu 10 ký tự">
+          <input className="input" type="password" autoComplete="new-password" value={f.next} onChange={(e) => setF({ ...f, next: e.target.value })} />
+        </Field>
+        <Field label="Nhập lại mật khẩu mới" req error={err?.field_errors?.confirm}>
+          <input className="input" type="password" autoComplete="new-password" value={f.confirm} onChange={(e) => setF({ ...f, confirm: e.target.value })} />
+        </Field>
       </div>
     </Modal>
   );

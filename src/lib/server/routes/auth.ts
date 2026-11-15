@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { RouteDef } from "../router";
 import { audit, rateLimit } from "../router";
 import { q, one, tx } from "../db";
-import { createSession, destroySession, SESSION_COOKIE, verifyPassword } from "../auth";
+import { createSession, destroySession, hashPassword, SESSION_COOKIE, verifyPassword } from "../auth";
 import { bad, forbidden, tooMany, unauthorized, notFound } from "../http";
 import { cleanupDemoTenants, createRealTenant, seedDemoTenant } from "../seed";
 import { ROLE_LABEL } from "../../shared/labels";
@@ -87,6 +87,27 @@ export const routes: RouteDef[] = [
         message:
           "Hệ thống chưa cấu hình gửi email khôi phục. Vui lòng liên hệ quản trị hệ thống của DOANH NGHIỆP PMU để được cấp lại mật khẩu.",
       };
+    },
+  },
+  {
+    method: "POST",
+    path: "/auth/change-password",
+    handler: async ({ ctx, body, ip }) => {
+      if (!rateLimit(`pw:${ip}`, 5)) throw tooMany();
+      if (ctx.mode === "DEMO") throw forbidden("Tài khoản demo không dùng mật khẩu.");
+      if (ctx.userId !== ctx.loginUserId) throw forbidden();
+      const u = await one<any>("SELECT password_hash FROM users WHERE id=$1", [ctx.loginUserId]);
+      const cur = String(body.current ?? "");
+      const next = String(body.next ?? "");
+      const fe: Record<string, string> = {};
+      if (!verifyPassword(cur, u?.password_hash)) fe.current = "Mật khẩu hiện tại không đúng";
+      if (next.length < 10) fe.next = "Mật khẩu mới tối thiểu 10 ký tự";
+      else if (next === cur) fe.next = "Mật khẩu mới phải khác mật khẩu hiện tại";
+      if (Object.keys(fe).length) throw bad("Vui lòng kiểm tra lại các trường được đánh dấu.", fe);
+      await q("UPDATE users SET password_hash=$2, updated_at=now(), version=version+1 WHERE id=$1", [ctx.loginUserId, hashPassword(next)]);
+      await q("DELETE FROM sessions WHERE user_id=$1 AND id<>$2", [ctx.loginUserId, ctx.sessionId]);
+      await audit(ctx, "auth.change_password", "user", ctx.loginUserId);
+      return { ok: true, message: "Đã đổi mật khẩu. Các phiên đăng nhập khác đã bị đăng xuất." };
     },
   },
   {

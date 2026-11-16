@@ -188,7 +188,7 @@ export default function AgentPipeline() {
             <div style={{ minWidth: 0 }}>
               <b style={{ color: "#fff" }}>Agent Điều phối</b>
               <small style={{ display: "block" }}>
-                Nhận việc từ khung chat “Giao việc AI” · {d.coordinator.pending} đề xuất chờ duyệt · bộ não {d.ai.configured ? `Claude (${d.ai.used}/${d.ai.budget} lượt)` : "chế độ quy tắc"}
+                Nhận việc từ khung chat “Giao việc AI” · {d.coordinator.pending} đề xuất chờ duyệt · bộ não {d.ai.configured ? `${d.ai.engine === "cli" ? "Claude CLI, gói Claude trên máy" : "Claude"} (${d.ai.used}/${d.ai.budget} lượt)` : "chế độ quy tắc"}
               </small>
             </div>
           </div>

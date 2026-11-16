@@ -8,7 +8,7 @@ import { useApp, useToast } from "./ui";
 import { fmtTime } from "@/lib/shared/format";
 
 type Msg = { id: string; role: "user" | "assistant"; content: any; biz_at?: string };
-type Status = { configured: boolean; model: string; budget: number; used: number; paused: boolean };
+type Status = { configured: boolean; engine?: string; model: string; budget: number; used: number; paused: boolean };
 
 const SAMPLES = [
   "Giao Nguyễn Thị Lan gọi xác nhận các lịch hẹn ngày mai trước 10:00",
@@ -34,6 +34,29 @@ function msgText(c: any): string {
   }
   for (const f of c.facts ?? []) lines.push(`• ${f.text}`);
   return lines.join("\n");
+}
+
+/** Hiển thị văn bản trợ lý: hỗ trợ **đậm**, tiêu đề #, gạch đầu dòng; không chèn HTML thô. */
+function RichText({ text }: { text: string }) {
+  const inline = (line: string, k: number) =>
+    line.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+      /^\*\*[^*]+\*\*$/.test(part) ? <b key={`${k}-${i}`}>{part.slice(2, -2)}</b> : <React.Fragment key={`${k}-${i}`}>{part}</React.Fragment>,
+    );
+  return (
+    <div className="rich">
+      {text.split("\n").map((raw, k) => {
+        const line = raw.replace(/\s+$/, "");
+        if (!line.trim()) return <div key={k} style={{ height: 6 }} />;
+        const h = /^#{1,4}\s+(.*)$/.exec(line);
+        if (h) return <div key={k} className="rich-h">{inline(h[1], k)}</div>;
+        const qt = /^>\s?(.*)$/.exec(line);
+        if (qt) return <div key={k} className="rich-q">{inline(qt[1], k)}</div>;
+        const li = /^(\s*)[-•*]\s+(.*)$/.exec(line);
+        if (li) return <div key={k} className="rich-li" style={{ paddingLeft: 12 + Math.min(li[1].length, 6) * 4 }}>{inline(li[2], k)}</div>;
+        return <div key={k}>{inline(line, k)}</div>;
+      })}
+    </div>
+  );
 }
 
 export function ChatPanel({ height = 560, onClose, embedded }: { height?: number | string; onClose?: () => void; embedded?: boolean }) {
@@ -116,7 +139,7 @@ export function ChatPanel({ height = 560, onClose, embedded }: { height?: number
     } catch {}
   };
 
-  const engineLabel = status?.paused ? "Đang dừng khẩn cấp" : status?.configured ? (status.used >= status.budget ? "Hết lượt AI hôm nay · chế độ quy tắc" : "Claude · có công cụ") : "Chế độ quy tắc";
+  const engineLabel = status?.paused ? "Đang dừng khẩn cấp" : status?.configured ? (status.used >= status.budget ? "Hết lượt AI hôm nay · chế độ quy tắc" : status.engine === "cli" ? "Claude CLI (gói Claude trên máy) · có công cụ" : "Claude · có công cụ") : "Chế độ quy tắc";
 
   return (
     <div className={`agent-panel ${embedded ? "embedded" : ""}`} style={{ height }}>
@@ -163,7 +186,7 @@ export function ChatPanel({ height = 560, onClose, embedded }: { height?: number
             </div>
           ) : (
             <div key={m.id} className="bubble in" style={{ maxWidth: "92%" }}>
-              <div style={{ whiteSpace: "pre-wrap" }}>{msgText(m.content)}</div>
+              <RichText text={msgText(m.content)} />
               {m.content?.note && <div className="agent-note">{m.content.note}</div>}
               {!!m.content?.actions?.length && (
                 <div className="agent-actions">
@@ -177,7 +200,7 @@ export function ChatPanel({ height = 560, onClose, embedded }: { height?: number
                 </div>
               )}
               <div className="meta">
-                {m.content?.engine === "claude" ? "Claude" : m.content?.engine === "rules" ? "Chế độ quy tắc" : "AI Assistant"}
+                {m.content?.engine === "claude" ? "Claude" : m.content?.engine === "claude-cli" ? "Claude CLI" : m.content?.engine === "rules" ? "Chế độ quy tắc" : "AI Assistant"}
                 {m.content?.tool_trace?.length ? ` · ${m.content.tool_trace.length} bước tra cứu` : ""}
                 {m.biz_at ? ` · ${fmtTime(m.biz_at)}` : ""}
               </div>
@@ -186,7 +209,7 @@ export function ChatPanel({ height = 560, onClose, embedded }: { height?: number
         )}
         {sending && (
           <div className="bubble in agent-typing">
-            <Loader2 size={16} className="spin" /> Trợ lý đang tra dữ liệu và xử lý...
+            <Loader2 size={16} className="spin" /> Trợ lý đang tra dữ liệu và xử lý{status?.engine === "cli" ? " (Claude CLI, khoảng 5–30 giây)" : ""}...
           </div>
         )}
         <div ref={endRef} />

@@ -336,7 +336,7 @@ function Company({ d, reload }: { d: any; reload: () => void }) {
             <dt>Cơ sở dữ liệu</dt>
             <dd>{d.db === "pg" ? "PostgreSQL" : "PGlite (máy cá nhân)"}</dd>
             <dt>AI</dt>
-            <dd style={{ fontWeight: 400 }}>{d.ai.engine}</dd>
+            <dd style={{ fontWeight: 400 }}>{d.ai.configured ? `Trợ lý giao việc: ${d.ai.model}` : d.ai.rules_engine}</dd>
           </dl>
           {d.can_manage && (
             <button className="btn btn-primary" style={{ alignSelf: "flex-start" }} disabled={busy} onClick={() => run(() => api("/settings/tenant", { method: "PATCH", body: { name } }), "Đã lưu.").then(reload)}>
@@ -647,7 +647,7 @@ function AiPolicies({ d, reload }: { d: any; reload: () => void }) {
             </div>
           ) : (
             <div className="banner warn mt-8">
-              <Info /> Chưa có khóa Claude (biến ANTHROPIC_API_KEY trên máy chủ). Trợ lý giao việc đang chạy chế độ quy tắc: {d.ai.engine}.
+              <Info /> Chưa có khóa Claude (biến ANTHROPIC_API_KEY trên máy chủ). Trợ lý giao việc đang chạy chế độ quy tắc: {d.ai.rules_engine}.
             </div>
           )}
           <Link href="/agents" className="btn btn-outline btn-sm mt-8" style={{ alignSelf: "flex-start" }}>

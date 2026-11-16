@@ -63,7 +63,7 @@ export const routes: RouteDef[] = [
           capabilities: adapter.capabilities(),
           has_secret: !!integ.credential_secret_ref,
         },
-        ai: { engine: ENGINE_LABEL, provider: null, ...(await aiStatus(ctx)) },
+        ai: { ...(await aiStatus(ctx)), rules_engine: ENGINE_LABEL, provider: null },
         simulated: {
           mode: tenant?.mode,
           active: tenant?.mode === "DEMO" || !!ctx.settings.simulated_data,

@@ -114,6 +114,29 @@ export function VideoDrawer({ id, onClose, onChanged }: { id: string; onClose: (
             </div>
           )}
           {v.situation && <div className="small">{v.situation}</div>}
+          {d.pending_script && (
+            <div className="banner warn small">
+              <ShieldCheck />
+              <div>
+                Có kịch bản đề xuất <b>{d.pending_script.code}</b> đang chờ duyệt.{" "}
+                <a className="link" href={`/approvals?open=${d.pending_script.id}`}>
+                  Mở để duyệt
+                </a>
+                {(d.pending_script.after_snapshot?.clips ?? []).map((c: any, i: number) => (
+                  <div key={i} className="script-clip" style={{ background: "#fff" }}>
+                    <div className="tiny muted">Clip {c.name}</div>
+                    {(c.lines ?? []).map((l: any, k: number) => (
+                      <div key={k} className="script-line">
+                        <b>{l.speaker}</b>
+                        <span>{l.text}</span>
+                        {l.expert ? <Badge tone="gold">Chờ thợ duyệt</Badge> : <span />}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div>
             <b>Kịch bản</b>
             {!(v.script ?? []).length && <div className="small muted mt-8">Chưa có kịch bản. Có thể nhờ trợ lý “Giao việc AI” viết theo luật kênh.</div>}

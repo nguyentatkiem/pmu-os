@@ -720,3 +720,4 @@ table.t tr.selected td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
   .funnel-conv { margin-left: 120px; }
   .mk-board { grid-template-columns: repeat(8, 200px); }
 }
+.script-preview { margin-top: 8px; max-width: 760px; }

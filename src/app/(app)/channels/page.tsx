@@ -101,6 +101,23 @@ export default function ChannelsPage() {
                         </div>
                         <b style={{ display: "block", marginTop: 6 }}>{p.summary}</b>
                         <div className="small muted">{p.reason}</div>
+                        {Array.isArray(p.after_snapshot?.clips) && (
+                          <div className="script-preview">
+                            {p.after_snapshot.headline && <div style={{ color: "#c0262d", fontWeight: 800 }}>{p.after_snapshot.headline}</div>}
+                            {p.after_snapshot.clips.map((c: any, i: number) => (
+                              <div key={i} className="script-clip">
+                                <div className="tiny muted">Clip {c.name}</div>
+                                {(c.lines ?? []).map((l: any, k: number) => (
+                                  <div key={k} className="script-line">
+                                    <b>{l.speaker}</b>
+                                    <span>{l.text}</span>
+                                    {l.expert ? <Badge tone="gold">Chờ thợ duyệt</Badge> : <span />}
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         <div className="tiny muted">
                           {fmtDateTime(p.biz_created_at)}
                           {p.decided_by ? ` · quyết định bởi ${p.decided_by}` : ""}

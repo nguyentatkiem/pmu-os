@@ -7,7 +7,7 @@ import { audit } from "../router";
 import { q, one, uid, j } from "../db";
 import { bad, conflict, notFound, str } from "../http";
 import { createProposal } from "../proposals";
-import { checkScript, ensureMarketing, FORMAT_LABEL, funnel, mediaDir, needsExpert, resolveMedia, REVIEW_CHECKLIST, syncFromDisk, VIDEO_STATUS_LABEL } from "../marketing";
+import { checkScript, ensureMarketing, FORMAT_LABEL, funnel, markExpert, mediaDir, needsExpert, resolveMedia, REVIEW_CHECKLIST, syncFromDisk, VIDEO_STATUS_LABEL, type ScriptClip } from "../marketing";
 import { addDays, fmtDate, vnDayKey, vnToDate } from "../../shared/format";
 
 const ORDER = ["IDEA", "SCRIPTED", "PRODUCED", "IN_REVIEW", "REVISE", "APPROVED", "SCHEDULED", "PUBLISHED", "REJECTED"];
@@ -79,15 +79,56 @@ export const routes: RouteDef[] = [
       const v = await loadVideo(ctx.tenantId, params.id);
       const reviews = await q<any>("SELECT * FROM mkt_reviews WHERE video_id=$1 ORDER BY biz_at DESC", [v.id]);
       const batch = v.batch_id ? await one<any>("SELECT code, title FROM mkt_batches WHERE id=$1", [v.batch_id]) : null;
+      const pending = await one<any>(
+        "SELECT id, code, after_snapshot FROM ai_proposals WHERE tenant_id=$1 AND action_type='VIDEO_IDEA' AND status='PENDING' AND proposed_payload->>'video_id'=$2 ORDER BY biz_created_at DESC LIMIT 1",
+        [ctx.tenantId, v.id],
+      );
       return {
         video: videoOut(v),
         batch,
+        pending_script: pending,
         reviews,
         checks: checkScript({ headline: v.headline, clips: v.script ?? [], caption: v.caption }),
         checklist: REVIEW_CHECKLIST,
         can_manage: ctx.can("marketing.manage"),
         can_review: ctx.can("marketing.review"),
       };
+    },
+  },
+  {
+    method: "POST",
+    path: "/marketing/videos/:id/script",
+    handler: async ({ ctx, body, params }) => {
+      ctx.require("marketing.manage", "Bạn không có quyền đề xuất kịch bản.");
+      const v = await loadVideo(ctx.tenantId, params.id);
+      if (!["IDEA", "SCRIPTED", "REVISE"].includes(v.status)) throw conflict(`Video đang ở trạng thái “${VIDEO_STATUS_LABEL[v.status]}”, không nhận kịch bản mới.`);
+      const clips: ScriptClip[] = markExpert(
+        (Array.isArray(body.clips) ? body.clips : []).slice(0, 3).map((c: any, i: number) => ({
+          name: str(c?.name, 60) || `T${i + 1}`,
+          lines: (Array.isArray(c?.lines) ? c.lines : []).slice(0, 8).map((l: any) => ({ speaker: str(l?.speaker, 30), text: str(l?.text, 200), ...(l?.expert ? { expert: true } : {}) })).filter((l: any) => l.speaker && l.text),
+        })),
+      );
+      if (!clips.length || clips.some((c) => !c.lines.length)) throw bad("Kịch bản thiếu lời thoại.", { clips: "Bắt buộc" });
+      let caption = str(body.caption, 400);
+      if (!/tạo bằng AI|do AI tạo/i.test(caption)) caption = `${caption}${caption ? "\n" : ""}Tình huống minh hoạ, video tạo bằng AI.`;
+      const headline = str(body.headline, 60) || v.headline || v.title;
+      const checks = checkScript({ headline, clips, caption });
+      if (checks.some((c) => c.level === "block")) throw conflict("Kịch bản vi phạm luật kênh, cần viết lại.", { checks });
+      const characters = Array.isArray(body.characters) ? body.characters.map((x: unknown) => str(x, 40)).filter(Boolean).slice(0, 4) : v.characters;
+      const r = await createProposal(ctx, {
+        action_type: "VIDEO_IDEA",
+        summary: `Kịch bản video ${v.code} “${v.title}” kênh Tiệm nói thật`,
+        payload: { channel_id: v.channel_id, video_id: v.id, format: v.format, title: v.title, headline, situation: str(body.situation, 400) || v.situation, characters, clips, caption, hashtags: str(body.hashtags, 120) || v.hashtags || "#phunxamthammy #phunmay" },
+        reason: `Viết theo skill Tiệm nói thật (hài trước, thật sau). Kiểm luật: ${checks.map((c) => c.text).join(" ")}`.slice(0, 900),
+        source_refs: [{ type: "video", id: v.id, label: `Video ${v.code} · ${v.title}`, href: `/marketing?video=${v.id}` }],
+        requested_label: str(body.requested_label, 80) || ctx.actorLabel,
+        before: { trang_thai: VIDEO_STATUS_LABEL[v.status] },
+        after: { title: `${v.code} · ${v.title}`, headline, clips, checks },
+        dedupe_key: `agent:channel:script:${v.id}`,
+        agent: "channel",
+      });
+      await audit(ctx, "marketing.script_proposal", "mkt_video", v.id, { code: v.code, proposal: r.code });
+      return { ok: true, proposal: r, checks, message: `Đã tạo đề xuất ${r.code}: kịch bản video ${v.code} chờ duyệt.` };
     },
   },
   {

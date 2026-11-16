@@ -38,6 +38,11 @@ export interface TenantSettings {
   permission_overrides?: PermissionOverrides;
   notifications?: Record<string, boolean>;
   booking_window_days?: number;
+  simulated_data?: boolean;
+  simulated_seeded?: boolean;
+  simulated_cleared?: boolean;
+  agents?: Record<string, { enabled: boolean }>;
+  agents_paused?: boolean;
 }
 
 export function hashPassword(pw: string) {

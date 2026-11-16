@@ -46,6 +46,8 @@ export interface NewProposal {
   target_type?: string | null;
   target_id?: string | null;
   target_version?: number | null;
+  dedupe_key?: string | null;
+  agent?: string | null;
 }
 
 /** Tạo đề xuất (L1). Server kiểm schema theo loại hành động, không nhận văn bản tùy ý để thực thi. */
@@ -53,6 +55,10 @@ export async function createProposal(ctx: Ctx, p: NewProposal, qq?: Q) {
   if (!ACTION_PERMISSION[p.action_type]) throw bad("Loại hành động không được hỗ trợ.");
   if (!p.reason?.trim()) throw bad("Đề xuất cần nêu lý do.", { reason: "Bắt buộc" });
   const run = async (qx: Q) => {
+    if (p.dedupe_key) {
+      const d = await qx<any>("SELECT id, code FROM ai_proposals WHERE tenant_id=$1 AND dedupe_key=$2 AND status='PENDING'", [ctx.tenantId, p.dedupe_key]);
+      if (d[0]) throw conflict(`Đã có đề xuất ${d[0].code} đang chờ duyệt cho việc này.`, { proposal_id: d[0].id });
+    }
     // Chống tạo trùng đề xuất đang chờ cho cùng đối tượng
     if (p.target_id) {
       const dup = await qx<any>(
@@ -66,8 +72,8 @@ export async function createProposal(ctx: Ctx, p: NewProposal, qq?: Q) {
     await qx(
       `INSERT INTO ai_proposals (id, tenant_id, branch_id, code, action_type, title, summary, proposed_payload, before_snapshot, after_snapshot,
          affected, source_refs, reason, requested_by, requested_label, owner_employee_id, required_permission, target_type, target_id, target_version,
-         status, expires_at, biz_created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,'PENDING',$21,$22)`,
+         status, expires_at, biz_created_at, dedupe_key, agent)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10::jsonb,$11::jsonb,$12::jsonb,$13,$14,$15,$16,$17,$18,$19,$20,'PENDING',$21,$22,$23,$24)`,
       [
         id,
         ctx.tenantId,
@@ -91,6 +97,8 @@ export async function createProposal(ctx: Ctx, p: NewProposal, qq?: Q) {
         p.target_version ?? null,
         new Date(ctx.now().getTime() + 48 * 3600000),
         ctx.now(),
+        p.dedupe_key ?? null,
+        p.agent ?? null,
       ],
     );
     await audit(ctx, "proposal.create", "ai_proposal", id, { code, action_type: p.action_type }, "OK", qx);

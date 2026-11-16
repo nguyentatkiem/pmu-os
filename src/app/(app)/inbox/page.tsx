@@ -222,6 +222,11 @@ function Conversation({ id, onBack, onChanged, demo }: { id: string; onBack: () 
               </div>
               {msgs.map((m: any) => (
                 <div key={m.id} className={`bubble ${m.direction === "IN" ? "in" : "out"}`}>
+                  {m.source_ref?.startsWith("agent:") && (
+                    <div className="tiny" style={{ color: "var(--gold-600)", fontWeight: 700, marginBottom: 4 }}>
+                      AI Agent soạn sẵn · theo {m.source_ref.split(":").slice(2).join(":")}
+                    </div>
+                  )}
                   {m.body}
                   <div className="meta">
                     {fmtTime(m.sent_at)} · {m.direction === "IN" ? m.author_label : `${m.author_label} · ${DELIVERY_LABEL[m.delivery_status]}`}

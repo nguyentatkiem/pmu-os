@@ -61,7 +61,7 @@ export async function nextCode(qq: Q, tenantId: string, table: "tasks" | "appoin
     `SELECT COALESCE(MAX(NULLIF(regexp_replace(code, '\\D', '', 'g'), '')::int), 0)::int AS n FROM ${table} WHERE tenant_id=$1`,
     [tenantId],
   );
-  return `${prefix}${String((r[0]?.n ?? 0) + 1).padStart(3, "0")}`;
+  return `${prefix}${String((r[0]?.n ?? 0) + 1).padStart(4, "0")}`;
 }
 
 // ---------------- Xung đột lịch ----------------

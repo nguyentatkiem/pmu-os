@@ -6,10 +6,11 @@ import { AlertTriangle, ArrowRight, CalendarDays, ChartColumn, CircleCheck, Clip
 import { useApi } from "@/lib/client/api";
 import { Badge, DesignRefButton, Empty, PageHead, PageState, SourceChip, Stat, useApp } from "@/components/ui";
 import { BarChart, Donut } from "@/components/charts";
+import AgentPipeline from "@/components/AgentPipeline";
 import { WEEKDAY_LABEL, dowOfDay, fmtDate, fmtDateTime, fmtShortDay, pct, vnDayKey } from "@/lib/shared/format";
 
 export default function DashboardPage() {
-  const { now } = useApp();
+  const { now, can } = useApp();
   const [date, setDate] = useState(vnDayKey(now()));
   const q = useApi<any>(`/dashboard?date=${date}`, [date]);
   const router = useRouter();
@@ -29,6 +30,11 @@ export default function DashboardPage() {
           </>
         }
       />
+      {can("approvals.view") && (
+        <div className="mb-16">
+          <AgentPipeline />
+        </div>
+      )}
       <PageState q={q}>
         {(d) => {
           const k = d.kpis;
@@ -37,7 +43,7 @@ export default function DashboardPage() {
             <div className="stack">
               <div className="grid g-4">
                 <Stat tone="teal" icon={<Users />} num={k.staff} label="Nhân sự" href="/people" />
-                <Stat tone="gold" icon={<ClipboardCheck />} num={k.total} label="Công việc" href="/tasks" />
+                <Stat tone="gold" icon={<ClipboardCheck />} num={k.total} label="Công việc 7 ngày" href="/tasks" />
                 <Stat tone="green" icon={<CircleCheck />} num={k.done} label="Hoàn thành" href="/tasks?filter=done" />
                 <Stat tone="red" icon={<TriangleAlert />} num={k.overdue} label="Quá hạn" href="/tasks?filter=overdue" />
               </div>

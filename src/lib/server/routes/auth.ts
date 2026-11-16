@@ -4,7 +4,7 @@ import { audit, rateLimit } from "../router";
 import { q, one, tx } from "../db";
 import { createSession, destroySession, hashPassword, SESSION_COOKIE, verifyPassword } from "../auth";
 import { bad, forbidden, tooMany, unauthorized, notFound } from "../http";
-import { cleanupDemoTenants, createRealTenant, seedDemoTenant } from "../seed";
+import { cleanupDemoTenants, createRealTenant, seedDemoTenant, seedRealTenant } from "../seed";
 import { ROLE_LABEL } from "../../shared/labels";
 import { visibleCustomerIds, integrationRow } from "../domain";
 import { fmtDateTime } from "../../shared/format";
@@ -47,6 +47,11 @@ export const routes: RouteDef[] = [
       // Thông báo lỗi chung, không tiết lộ email có tồn tại hay không
       if (!user || user.status !== "ACTIVE" || !verifyPassword(password, user.password_hash))
         throw unauthorized("Email hoặc mật khẩu không đúng. Nếu cần hỗ trợ, vui lòng liên hệ quản trị hệ thống.");
+      if (user.mode === "REAL") {
+        // Doanh nghiệp thật còn trống và chưa từng xóa dữ liệu mô phỏng => nạp bộ dữ liệu mô phỏng dày (Sếp chốt 16/11/2026)
+        const t = await one<any>("SELECT settings, (SELECT count(*)::int FROM employees e WHERE e.tenant_id=tenants.id) AS n FROM tenants WHERE id=$1", [user.tenant_id]);
+        if (t && t.n === 0 && !t.settings?.simulated_cleared && !t.settings?.simulated_seeded) await seedRealTenant(user.tenant_id).catch((e) => console.error("seed real", e));
+      }
       const token = await createSession(user.tenant_id, user.id, 7);
       await audit({ tenantId: user.tenant_id, userId: user.id, actorLabel: user.display_name, selectedBranch: "all" }, "auth.login", "user", user.id);
       return withCookie({ ok: true }, token, 7);
@@ -135,6 +140,7 @@ export const routes: RouteDef[] = [
         personas: personas.map((p) => ({ ...p, role_label: ROLE_LABEL[p.role as keyof typeof ROLE_LABEL] })),
         integration: { provider: "ZALO", health: integ.health, mode: integ.mode },
         settings: { quiet_hours: ctx.settings.quiet_hours },
+        simulated: ctx.mode === "DEMO" || !!ctx.settings.simulated_data,
       };
     },
   },

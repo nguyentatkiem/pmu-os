@@ -133,7 +133,7 @@ export default function ShiftsPage() {
                           .filter((s: any) => vnDayKey(s.start_at) === day)
                           .map((s: any) => (
                             <div key={s.id} className="list-item" onClick={() => d.can_manage && setEdit(s)}>
-                              <Avatar name={empMap[s.employee_id]?.display_name ?? "?"} size="sm" />
+                              <Avatar name={empMap[s.employee_id]?.display_name ?? "?"} src={empMap[s.employee_id]?.avatar} size="sm" />
                               <span style={{ flex: 1 }}>{empMap[s.employee_id]?.display_name}</span>
                               <span className={`shift-pill ${s.status === "DRAFT" ? "draft" : conflictIds.has(s.id) ? "conflict" : ""}`}>{shiftLabel(s)}</span>
                             </div>

@@ -56,47 +56,64 @@ async function main() {
   console.log(`PMU OS — kiểm thử AC trên ${BASE}\n`);
   const A = await new Client().demo();
   const B = await new Client().demo();
+  const MANAGER = "Phạm Quốc Hưng"; // quản lý Chi nhánh Cầu Giấy
+  const TECH = "Lê Thu Hà"; // kỹ thuật viên Chi nhánh Cầu Giấy
+  const CSKH = "Nguyễn Thị Lan";
 
-  // AC08
+  // AC08 — bộ dữ liệu dày: số liệu tự nhất quán (không còn mốc cố định 8/24/20/3/1)
   const dash = (await A.get("/dashboard")).data;
   const k = dash.kpis;
-  ok("AC08", "Tổng quan demo 8/24/20/3/1", k.staff === 8 && k.total === 24 && k.done === 20 && k.active === 3 && k.overdue === 1, JSON.stringify(k));
-  const br2 = A.me.branches.find((b) => b.name === "Chi nhánh mẫu 2");
-  A.branch = br2.id;
+  ok(
+    "AC08",
+    "Tổng quan dữ liệu dày: 22 nhân sự, số việc tự khớp (xong + đang làm + cần làm + quá hạn ≤ tổng)",
+    k.staff === 22 && k.total >= 40 && k.done + k.active + k.todo + k.overdue <= k.total && k.done > 0 && k.overdue >= 1,
+    JSON.stringify(k),
+  );
+  const brHD = A.me.branches.find((b) => b.name === "Chi nhánh Hà Đông");
+  A.branch = brHD.id;
   const dash2 = (await A.get("/dashboard")).data;
-  const perf2 = (await A.get("/performance?role=CONSULTANT")).data;
   A.branch = "all";
-  ok("AC08", "Lọc chi nhánh ảnh hưởng KPI; mẫu số 0 = chưa đủ dữ liệu", dash2.kpis.total === 0 && dash2.kpis.staff === 0 && Object.values(perf2.totals).every((m) => m.value === null), `CN2 total=${dash2.kpis.total}`);
+  ok("AC08", "Lọc chi nhánh làm thay đổi KPI", dash2.kpis.staff > 0 && dash2.kpis.staff < k.staff && dash2.kpis.total < k.total, `Hà Đông: ${dash2.kpis.staff} nhân sự, ${dash2.kpis.total} việc`);
 
   // AC01
-  const custA = (await A.get("/customers")).data.items[0];
+  const custList = (await A.get("/customers")).data;
+  const custA = custList.items[0];
   const taskA = (await A.get("/tasks")).data.items[0];
   const r1 = await B.get(`/customers/${custA.id}`);
   const r2 = await B.patch(`/customers/${custA.id}`, { display_name: "X" });
   const r3 = await B.get(`/tasks/${taskA.id}`);
   const r4 = await B.post(`/customers/${custA.id}/reveal-contact`);
   ok("AC01", "Khác doanh nghiệp không đọc/sửa/xem số được (gọi API trực tiếp)", [r1, r2, r3, r4].every((r) => r.status === 404), [r1, r2, r3, r4].map((r) => r.status).join(","));
-  await A.as("Nhân sự A");
-  A.branch = br2.id;
+  await A.as(MANAGER);
+  A.branch = brHD.id;
   const r5 = await A.get("/dashboard");
   A.branch = "all";
   ok("AC01", "Quản lý chi nhánh không xem được chi nhánh ngoài phạm vi", r5.status === 403, `status=${r5.status}`);
-  await A.as("Nhân sự D");
+  await A.as(TECH);
   const r6 = await A.get("/people");
   const r7 = (await A.get("/customers")).data;
-  const r8 = await A.get(`/customers/${custA.id}`);
-  ok("AC01", "Kỹ thuật viên không xem hồ sơ nhân sự; chỉ thấy khách trong lịch của mình (tối thiểu)", r6.status === 403 && r7.minimal === true && r7.items.every((c) => c.display_name !== "Khách mẫu A" || false), `people=${r6.status}, khách=${r7.items.map((c) => c.display_name).join("/")}, A=${r8.status}`);
+  ok(
+    "AC01",
+    "Kỹ thuật viên không xem hồ sơ nhân sự; chỉ thấy khách trong lịch của mình (tối thiểu)",
+    r6.status === 403 && r7.minimal === true && r7.items.length < (custList.total ?? custList.items.length),
+    `people=${r6.status}, khách thấy được=${r7.items.length}`,
+  );
+  const t1 = await A.post("/agents/hr/run");
+  const t2 = await A.get("/brain");
+  const t3 = await A.get("/agents/pipeline");
+  ok("AG04", "Nhân viên không chạy được agent, không xem Bộ não và luồng agent", [t1, t2, t3].every((r) => r.status === 403), [t1, t2, t3].map((r) => r.status).join(","));
   await A.as("Quản trị hệ thống (demo)");
   const r9 = await A.get("/customers");
   ok("AC01", "Quản trị hệ thống không tự có quyền xem dữ liệu khách", r9.status === 403, `status=${r9.status}`);
   await A.as("Chủ doanh nghiệp (demo)");
 
   // AC02
+  const before = (await A.get("/dashboard")).data.kpis;
   const owners = (await A.get("/tasks")).data.owners;
-  const G = owners.find((o) => o.display_name === "Nhân sự G");
+  const G = owners.find((o) => o.display_name === TECH);
   const due = new Date(new Date(A.me.tenant.now).getTime() + 86400000).toISOString();
   const created = (await A.post("/tasks", { title: "Kiểm thử AC02", owner_id: G.id, due_at: due, checklist: ["Bước 1", "Bước 2"] })).data;
-  await A.as("Nhân sự G");
+  await A.as(TECH);
   await A.post(`/tasks/${created.id}/accept`);
   const early = await A.post(`/tasks/${created.id}/submit`);
   const det = (await A.get(`/tasks/${created.id}`)).data;
@@ -109,33 +126,50 @@ async function main() {
   ok(
     "AC02",
     "Tạo → nhận → checklist → nộp → duyệt; nộp thiếu checklist bị chặn; tự duyệt bị chặn; tổng quan cập nhật",
-    early.status === 409 && sub.status === 200 && selfReview.status === 403 && rev.status === 200 && dash3.total === 25 && dash3.done === 21,
-    `nộp sớm=${early.status}, nộp=${sub.status}, tự duyệt=${selfReview.status}, duyệt=${rev.status}, tổng=${dash3.total}/${dash3.done}`,
+    early.status === 409 && sub.status === 200 && selfReview.status === 403 && rev.status === 200 && dash3.total === before.total + 1 && dash3.done === before.done + 1,
+    `nộp sớm=${early.status}, nộp=${sub.status}, tự duyệt=${selfReview.status}, duyệt=${rev.status}, tổng ${before.total}→${dash3.total}, xong ${before.done}→${dash3.done}`,
   );
 
-  // AC03
-  const ap = (await A.get("/appointments?date=2026-11-16")).data;
-  const D = ap.staff.find((s) => s.display_name === "Nhân sự D");
+  // AC03 — tìm một khung giờ trống thật, rồi bắn 2 yêu cầu trùng cùng lúc
+  const day = "2026-11-17";
+  const ap = (await A.get(`/appointments?date=${day}`)).data;
   const sv = ap.services.find((s) => s.name === "Tư vấn PMU");
-  const cust = ap.customers.find((c) => c.display_name === "Khách mẫu C");
-  const slot = "2026-11-16T04:00:00.000Z"; // 11:00 giờ VN, D đang trống
-  const both = await Promise.all([
-    A.post("/appointments", { customer_id: cust.id, service_id: sv.id, employee_id: D.id, start_at: slot }),
-    A.post("/appointments", { customer_id: cust.id, service_id: sv.id, employee_id: D.id, start_at: slot }),
-  ]);
+  const cust = ap.customers[3];
+  let slot = null;
+  let emp = null;
+  for (const e of ap.staff.filter((s) => s.position === "CONSULTANT" || s.position === "TECHNICIAN")) {
+    for (const hh of ["08", "09", "10", "11", "13", "14", "15", "16"]) {
+      const at = new Date(`${day}T${hh}:00:00+07:00`).toISOString();
+      const tr = await A.post("/appointments", { customer_id: cust.id, service_id: sv.id, employee_id: e.id, start_at: at });
+      if (tr.status === 200) {
+        await A.post(`/appointments/${tr.data.id}/cancel`, { reason: "Dò giờ trống cho AC03" });
+        slot = at;
+        emp = e;
+        break;
+      }
+    }
+    if (slot) break;
+  }
+  const both = slot
+    ? await Promise.all([
+        A.post("/appointments", { customer_id: cust.id, service_id: sv.id, employee_id: emp.id, start_at: slot }),
+        A.post("/appointments", { customer_id: cust.id, service_id: sv.id, employee_id: emp.id, start_at: slot }),
+      ])
+    : [];
   const st = both.map((r) => r.status).sort();
   const loser = both.find((r) => r.status === 409);
-  ok("AC03", "Hai yêu cầu đặt trùng đồng thời: 1 thành công, 1 nhận 409 kèm gợi ý", st[0] === 200 && st[1] === 409 && !!loser?.data?.error?.suggestion, `status=${st.join(",")}, gợi ý=${loser?.data?.error?.suggestion?.start_at ?? "-"}`);
+  ok("AC03", "Hai yêu cầu đặt trùng đồng thời: 1 thành công, 1 nhận 409 kèm gợi ý", st[0] === 200 && st[1] === 409 && !!loser?.data?.error?.suggestion, `nhân sự=${emp?.display_name}, giờ=${slot}, status=${st.join(",")}, gợi ý=${loser?.data?.error?.suggestion?.start_at ?? "-"}`);
 
   // AC04
-  const newAppt = both.find((r) => r.status === 200).data;
-  const cancel = await A.post(`/appointments/${newAppt.id}/cancel`, { reason: "Kiểm thử AC04" });
-  const after = (await A.get(`/appointments/${newAppt.id}`)).data.reminders;
+  const newAppt = both.find((r) => r.status === 200)?.data;
+  const cancel = newAppt ? await A.post(`/appointments/${newAppt.id}/cancel`, { reason: "Kiểm thử AC04" }) : { data: {} };
+  const after = newAppt ? (await A.get(`/appointments/${newAppt.id}`)).data.reminders : [];
   const conv = (await A.get("/conversations")).data.items[0];
   const e1 = await A.post("/integrations/zalo/simulate-inbound", { conversation_id: conv.id, body: "Tin thử", external_event_id: "ac04-evt-1" });
   const e2 = await A.post("/integrations/zalo/simulate-inbound", { conversation_id: conv.id, body: "Tin thử", external_event_id: "ac04-evt-1" });
-  const r1x = await A.post(`/tasks/${(await A.get("/tasks")).data.items.find((t) => t.status === "IN_PROGRESS").id}/remind`);
-  const r2x = await A.post(`/tasks/${(await A.get("/tasks")).data.items.find((t) => t.status === "IN_PROGRESS").id}/remind`);
+  const inprog = (await A.get("/tasks")).data.items.find((t) => t.status === "IN_PROGRESS");
+  await A.post(`/tasks/${inprog.id}/remind`);
+  const r2x = await A.post(`/tasks/${inprog.id}/remind`);
   ok(
     "AC04",
     "Hủy lịch vô hiệu nhắc cũ; webhook lặp không tạo tin trùng; nhắc việc lặp không gửi lặp",
@@ -155,38 +189,42 @@ async function main() {
     `sop=${a1.sources[0]?.label}, ngoài nguồn=${a2.kind}, injection=${a3.kind}, nháp=${a4.kind}`,
   );
 
-  // AC06
+  // AG06 — 20 hội thoại Zalo mô phỏng có agent trả lời sẵn
   const pend = (await A.get("/approvals?tab=pending")).data.items;
+  const hist = (await A.get("/approvals?tab=history")).data.items;
+  const zPend = pend.filter((p) => /-Z\d\d$/.test(p.code));
+  const zDone = hist.filter((p) => /-Z\d\d$/.test(p.code) && p.status === "EXECUTED");
+  ok("AG06", "20 kịch bản Zalo: 11 trả lời đã duyệt, 7 bản soạn sẵn chờ duyệt, 2 chuyển chuyên viên", zDone.length === 11 && zPend.length === 7, `đã duyệt=${zDone.length}, chờ duyệt=${zPend.length}`);
+
+  // AC06
   const sop = pend.find((p) => p.action_type === "SOP_PUBLISH");
   const two = await Promise.all([A.post(`/approvals/${sop.id}/approve`, { reason: "ok" }), A.post(`/approvals/${sop.id}/approve`, { reason: "ok" })]);
   const execs = two.filter((r) => !r.data?.already_decided && r.data?.execution?.status === "SUCCEEDED").length;
   const already = two.filter((r) => r.data?.already_decided).length;
   const shift = pend.find((p) => p.action_type === "SHIFT_REASSIGN");
-  // Đổi dữ liệu gốc trước khi duyệt => phải trả lại
-  const shiftRow = (await A.get("/shifts?week=2026-11-16")).data.shifts.find((s) => s.id === shift.proposed_payload?.shift_id) ?? null;
   const detail = (await A.get(`/approvals/${shift.id}`)).data.proposal;
   const sh = (await A.get("/shifts?week=2026-11-16")).data.shifts.find((s) => s.id === detail.proposed_payload.shift_id);
   await A.patch(`/shifts/${sh.id}`, { expected_version: sh.version, start_at: sh.start_at, end_at: new Date(new Date(sh.end_at).getTime() - 30 * 60000).toISOString() });
   const stale = await A.post(`/approvals/${shift.id}/approve`, { reason: "ok" });
-  ok("AC06", "Duyệt 2 lần chỉ thực thi 1 lần; dữ liệu gốc đổi thì không thực thi", execs === 1 && already === 1 && stale.data?.status === "RETURNED", `thực thi=${execs}, bỏ qua=${already}, khi dữ liệu đổi=${stale.data?.status}${shiftRow ? "" : ""}`);
+  ok("AC06", "Duyệt 2 lần chỉ thực thi 1 lần; dữ liệu gốc đổi thì không thực thi", execs === 1 && already === 1 && stale.data?.status === "RETURNED", `thực thi=${execs}, bỏ qua=${already}, khi dữ liệu đổi=${stale.data?.status}`);
 
   // AC07 + AC11
-  const custs = (await A.get("/customers")).data.items;
-  const cA = custs.find((c) => c.display_name === "Khách mẫu A");
-  const rv = await A.post(`/customers/${cA.id}/consents`, { purpose: "CARE", status: "REVOKED", source: "Kiểm thử AC07" });
-  const msgP = pend.find((p) => p.action_type === "CUSTOMER_MESSAGE");
+  const msgP = pend.find((p) => p.action_type === "CUSTOMER_MESSAGE" && !/-Z\d\d$/.test(p.code));
+  const msgDet = (await A.get(`/approvals/${msgP.id}`)).data.proposal;
+  const targetCust = msgDet.affected.find((x) => x.type === "customer");
+  const rv = await A.post(`/customers/${targetCust.id}/consents`, { purpose: "CARE", status: "REVOKED", source: "Kiểm thử AC07" });
   const ap2 = await A.post(`/approvals/${msgP.id}/approve`, { reason: "ok" });
-  const convs = (await A.get("/conversations")).data.items;
-  const cvB = convs.find((c) => c.customer === "Khách mẫu B");
-  const send = await A.post(`/conversations/${cvB.id}/send`, { body: "Xin chào" });
-  const prop = await A.post(`/conversations/${cvB.id}/propose`, { body: "Dạ anh/chị muốn tư vấn vào thời gian nào ạ?" });
-  const ap3 = await A.post(`/approvals/${prop.data.proposal.id}/approve`, { reason: "ok" });
-  const msgs = (await A.get(`/conversations/${cvB.id}`)).data.messages;
-  const last = msgs[msgs.length - 1];
   ok("AC07", "Rút đồng ý trước khi gửi: dừng job và không gửi", rv.data?.jobs_stopped >= 1 && ap2.data?.execution?.status === "BLOCKED", `job dừng=${rv.data?.jobs_stopped}, thực thi=${ap2.data?.execution?.status}: ${ap2.data?.execution?.result?.message}`);
+  const zp = zPend[0];
+  const zDet = (await A.get(`/approvals/${zp.id}`)).data.proposal;
+  const cvId = zDet.proposed_payload.conversation_id;
+  const send = await A.post(`/conversations/${cvId}/send`, { body: "Xin chào" });
+  const ap3 = await A.post(`/approvals/${zp.id}/approve`, { reason: "ok" });
+  const msgs = (await A.get(`/conversations/${cvId}`)).data.messages;
+  const last = msgs[msgs.length - 1];
   ok(
     "AC11",
-    "Zalo chưa kết nối: gửi trực tiếp 503, duyệt gửi không báo “Đã gửi” giả",
+    "Zalo chưa kết nối: gửi trực tiếp 503, duyệt bản agent soạn không báo “Đã gửi” giả",
     send.status === 503 && ap3.data?.execution?.status === "BLOCKED" && last.delivery_status === "not_sent",
     `gửi=${send.status}, thực thi=${ap3.data?.execution?.status}, trạng thái tin=${last.delivery_status}`,
   );
@@ -199,7 +237,63 @@ async function main() {
   // AC09 (một phần): API không trả secret
   const s = (await A.get("/settings")).data;
   const txt = JSON.stringify(s);
-  ok("AC09", "API cài đặt không lộ secret/credential", !/postgres(ql)?:\/\/|password_hash|credential_secret_ref"\s*:\s*"/i.test(txt) && s.integration.has_secret === false, "kiểm /api/settings");
+  ok("AC09", "API cài đặt không lộ secret/credential", !/postgres(ql)?:\/\/|password_hash|credential_secret_ref"\s*:\s*"|sk-ant-/i.test(txt) && s.integration.has_secret === false, "kiểm /api/settings");
+
+  // AG01 — agent chạy, không tạo đề xuất trùng, Agent Nhân sự giới hạn số đề xuất ca
+  const hr = (await A.post("/agents/hr/run")).data;
+  const c1 = (await A.post("/agents/care/run")).data;
+  const c2 = (await A.post("/agents/care/run")).data;
+  const shiftProps = hr.proposals.filter((p) => /ca|Ca/.test(p.summary)).length;
+  ok(
+    "AG01",
+    "Agent chạy có tra Bộ não; chạy lại không tạo đề xuất trùng; đề xuất ca ≤ 6 mỗi lượt",
+    hr.status === "SUCCEEDED" && c1.status === "SUCCEEDED" && c2.proposals.length === 0 && c1.brain.length > 0 && shiftProps <= 6,
+    `nhân sự: ${hr.summary} | CSKH lần 1: ${c1.summary} | lần 2: ${c2.proposals.length} đề xuất mới, bỏ qua ${c2.skipped.length}`,
+  );
+
+  // AG03 — khung chat giao việc chỉ tạo đề xuất
+  const tasksBefore = (await A.get("/tasks")).data.items.length;
+  const chat = (await A.post("/agent/chat", { message: `Giao ${CSKH} gọi xác nhận các lịch hẹn ngày mai trước 10:00` })).data;
+  const prop = chat.reply.actions.find((x) => x.type === "proposal");
+  const propDet = prop ? (await A.get(`/approvals/${prop.id}`)).data.proposal : null;
+  const tasksAfter = (await A.get("/tasks")).data.items.length;
+  ok(
+    "AG03",
+    "Chat giao việc → đề xuất chờ duyệt đúng người, chưa tạo việc thật",
+    !!propDet && propDet.status === "PENDING" && propDet.action_type === "TASK_ASSIGN" && JSON.stringify(propDet.after_snapshot).includes(CSKH) && tasksAfter === tasksBefore,
+    `engine=${chat.reply.engine}, đề xuất=${propDet?.code} ${propDet?.status}, việc ${tasksBefore}→${tasksAfter}`,
+  );
+
+  // AG02 — dừng khẩn cấp
+  await A.post("/agents/pause", { paused: true });
+  const pr = (await A.post("/agents/sop/run")).data;
+  const pc = (await A.post("/agent/chat", { message: `Giao ${CSKH} kiểm tra kho mực` })).data;
+  await A.post("/agents/pause", { paused: false });
+  const pr2 = (await A.post("/agents/sop/run")).data;
+  ok("AG02", "Dừng khẩn cấp: agent bỏ qua, chat không giao việc; bật lại chạy bình thường", pr.status === "SKIPPED" && pc.reply.actions.length === 0 && /dừng khẩn cấp/.test(pc.reply.text) && pr2.status === "SUCCEEDED", `khi dừng=${pr.status}, sau khi bật=${pr2.status}`);
+
+  // AG05 — Bộ não: agent chỉ dùng mục đã duyệt
+  const brain = (await A.get("/brain?kind=PENDING")).data;
+  const lesson = brain.items.find((n) => n.title.includes("checklist"));
+  const sq1 = (await A.get(`/brain/search?q=${encodeURIComponent("việc có checklist dài dễ trễ hạn")}`)).data.hits;
+  const okReview = await A.post(`/brain/${lesson.id}/review`, { action: "approve" });
+  const sq2 = (await A.get(`/brain/search?q=${encodeURIComponent("việc có checklist dài dễ trễ hạn")}`)).data.hits;
+  ok(
+    "AG05",
+    "Bộ não: mục chờ duyệt không được agent dùng; duyệt xong mới dùng",
+    !sq1.some((h) => h.id === lesson.id) && okReview.status === 200 && sq2.some((h) => h.id === lesson.id),
+    `trước duyệt=${sq1.length} mục, sau duyệt có mục=${sq2.some((h) => h.id === lesson.id)}`,
+  );
+
+  // AG07 — mô phỏng tin Zalo đến, agent xử lý; luồng agent trên Tổng quan
+  const sim = await A.post("/agents/simulate-inbound");
+  const pipe = (await A.get("/agents/pipeline")).data;
+  ok(
+    "AG07",
+    "Tin Zalo mô phỏng đến → Agent CSKH tra Bộ não và soạn/chuyển; Tổng quan hiện đủ 4 làn agent",
+    sim.status === 200 && sim.data.run.status === "SUCCEEDED" && pipe.lanes.length === 4 && pipe.feed.length > 0,
+    `khách=${sim.data?.customer}, soạn sẵn=${sim.data?.draft ? "có" : "chuyển chuyên viên"}, làn=${pipe.lanes.length}`,
+  );
 
   const pass = results.filter((r) => r.pass).length;
   console.log(`\nKết quả: ${pass}/${results.length} kiểm tra đạt.`);

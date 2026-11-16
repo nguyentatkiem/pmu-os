@@ -40,9 +40,11 @@ export const routes: RouteDef[] = [
         `SELECT t.*, c.display_name AS customer, c.code AS customer_code, c.avatar, e.display_name AS owner, p.status AS plan_status, tp.version_label AS tpl_version
            FROM care_touchpoints t JOIN customers c ON c.id=t.customer_id JOIN care_plans p ON p.id=t.plan_id
            LEFT JOIN employees e ON e.id=t.owner_id LEFT JOIN care_templates tp ON tp.id=t.template_id
-          WHERE t.tenant_id=$1 AND t.customer_id = ANY($2) AND ($3::text IS NULL OR t.status=$3)
-          ORDER BY (t.status IN ('TO_CONTACT','WAITING_REPLY')) DESC, t.due_at`,
-        [ctx.tenantId, ids, status],
+          WHERE t.tenant_id=$1 AND t.customer_id = ANY($2)
+            AND ($3::text IS NULL OR t.status=$3 OR ($3 = 'open' AND (t.status IN ('TO_CONTACT','WAITING_REPLY') OR (t.status='PLANNED' AND t.due_at < $4::timestamptz + interval '7 days'))))
+          ORDER BY (t.status IN ('TO_CONTACT','WAITING_REPLY')) DESC, t.due_at
+          LIMIT 300`,
+        [ctx.tenantId, ids, status, now],
       );
       const all = await q<any>("SELECT t.status, t.customer_id, t.due_at FROM care_touchpoints t WHERE t.tenant_id=$1 AND t.customer_id = ANY($2)", [ctx.tenantId, ids]);
       const plans = await q<any>("SELECT count(DISTINCT customer_id)::int AS n FROM care_plans WHERE tenant_id=$1 AND customer_id = ANY($2) AND status<>'DONE'", [ctx.tenantId, ids]);

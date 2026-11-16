@@ -14,6 +14,7 @@ export interface Me {
   perms: string[];
   personas: { id: string; display_name: string; role: string; role_label: string }[];
   integration: { provider: string; health: string; mode: string };
+  simulated?: boolean;
 }
 export const AppCtx = createContext<{
   me: Me | null;

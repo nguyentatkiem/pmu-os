@@ -155,14 +155,15 @@ export async function computeMetric(
 }
 
 /** Thống kê công việc dùng chung cho Tổng quan và Báo cáo: tập công việc tạo đến mốc cắt */
-export async function taskStats(qq: Q, tenantId: string, branchIds: string[], cutoff: Date, ownerId?: string | null) {
+export async function taskStats(qq: Q, tenantId: string, branchIds: string[], cutoff: Date, ownerId?: string | null, since?: Date | null) {
   const rows = await qq<any>(
     `SELECT t.id, t.code, t.title, t.status, t.due_at, t.completed_at, t.owner_id, t.priority, t.customer_id, e.display_name AS owner_name
        FROM tasks t JOIN employees e ON e.id = t.owner_id
       WHERE t.tenant_id=$1 AND t.branch_id = ANY($2) AND t.status <> 'CANCELLED' AND t.biz_created_at <= $3
         AND ($4::uuid IS NULL OR t.owner_id = $4::uuid)
+        AND ($5::timestamptz IS NULL OR t.biz_created_at >= $5::timestamptz OR t.status IN ('TODO','IN_PROGRESS','SUBMITTED') OR t.completed_at > $3)
       ORDER BY t.due_at`,
-    [tenantId, branchIds, cutoff, ownerId ?? null],
+    [tenantId, branchIds, cutoff, ownerId ?? null, since ?? null],
   );
   const done = rows.filter((r) => r.status === "DONE" && (!r.completed_at || new Date(r.completed_at) <= cutoff));
   const open = rows.filter((r) => !done.includes(r));

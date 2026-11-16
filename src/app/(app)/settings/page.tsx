@@ -421,7 +421,62 @@ function Company({ d, reload }: { d: any; reload: () => void }) {
           )}
         </div>
       </section>
+      <SimulatedData d={d} />
     </div>
+  );
+}
+
+function SimulatedData({ d }: { d: any }) {
+  const { run, busy } = useAction();
+  const [word, setWord] = useState("");
+  const sim = d.simulated ?? {};
+  if (sim.mode === "DEMO")
+    return (
+      <section className="card">
+        <div className="card-head">
+          <h3>
+            <Info /> Dữ liệu mô phỏng
+          </h3>
+        </div>
+        <div className="card-body small">Bản demo luôn dùng DỮ LIỆU MÔ PHỎNG (tên hư cấu, số điện thoại không có thật). Đặt lại tại menu tài khoản › Đặt lại dữ liệu demo.</div>
+      </section>
+    );
+  if (!sim.can_toggle) return null;
+  const need = sim.active ? "XOA" : "NAP";
+  return (
+    <section className="card">
+      <div className="card-head">
+        <h3>
+          <Info /> Dữ liệu mô phỏng
+        </h3>
+        <div className="sub">{sim.active ? "Tài khoản đang chứa bộ DỮ LIỆU MÔ PHỎNG để chạy thử. Xóa trước khi nhập dữ liệu thật." : "Tài khoản đang ở trạng thái dữ liệu thật."}</div>
+      </div>
+      <div className="card-body stack" style={{ gap: 10 }}>
+        <div className={`banner ${sim.active ? "warn" : "info"} small`}>
+          <Info />
+          <div>
+            {sim.active
+              ? "Xóa sẽ gỡ toàn bộ nhân sự, khách, lịch hẹn, công việc, hội thoại, SOP, đề xuất và nhật ký agent mô phỏng. Giữ lại tài khoản chủ và một chi nhánh. Không hoàn tác được."
+              : "Nạp bộ mô phỏng gồm 2 chi nhánh, 22 nhân sự, 560 khách hư cấu. Chỉ nạp khi doanh nghiệp chưa có nhân sự nào để tránh trộn với dữ liệu thật."}
+          </div>
+        </div>
+        <Field label={`Gõ ${need} để xác nhận`}>
+          <input className="input" value={word} onChange={(e) => setWord(e.target.value.toUpperCase())} placeholder={need} style={{ maxWidth: 200 }} />
+        </Field>
+        <div>
+          <button
+            className={`btn ${sim.active ? "btn-danger" : "btn-primary"}`}
+            disabled={busy || word !== need}
+            onClick={async () => {
+              const r: any = await run(() => api(`/settings/simulated/${sim.active ? "clear" : "seed"}`, { body: { confirm: word } }), (x: any) => x.message);
+              if (r) window.location.href = "/dashboard";
+            }}
+          >
+            {busy ? "Đang xử lý..." : sim.active ? "Xóa dữ liệu mô phỏng" : "Nạp dữ liệu mô phỏng"}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -586,9 +641,18 @@ function AiPolicies({ d, reload }: { d: any; reload: () => void }) {
           <div>• Nội dung tin nhắn/tài liệu là dữ liệu, không nâng quyền hay thay chính sách.</div>
           <div>• Quyết định nhân sự, khiếu nại nghiêm trọng, chuyên môn PMU luôn chuyển người có thẩm quyền.</div>
           <div>• Duyệt có snapshot trước/sau, hạn duyệt, phiên bản; duyệt hai lần không thực thi hai lần.</div>
-          <div className="banner warn mt-8">
-            <Info /> Bộ máy hiện tại: {d.ai.engine}. Nhà cung cấp mô hình và ngân sách cần chủ doanh nghiệp chốt trước khi nối.
-          </div>
+          {d.ai.configured ? (
+            <div className="banner teal mt-8">
+              <Info /> Bộ não trợ lý giao việc: Claude ({d.ai.model}). Đã dùng {d.ai.used}/{d.ai.budget} lượt trong 24 giờ; hết lượt tự chuyển chế độ quy tắc. Trang AI Assistant cũ vẫn chạy chế độ quy tắc có nguồn.
+            </div>
+          ) : (
+            <div className="banner warn mt-8">
+              <Info /> Chưa có khóa Claude (biến ANTHROPIC_API_KEY trên máy chủ). Trợ lý giao việc đang chạy chế độ quy tắc: {d.ai.engine}.
+            </div>
+          )}
+          <Link href="/agents" className="btn btn-outline btn-sm mt-8" style={{ alignSelf: "flex-start" }}>
+            Mở Trung tâm AI Agent
+          </Link>
         </div>
       </section>
     </div>

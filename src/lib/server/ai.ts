@@ -554,18 +554,21 @@ export async function analyzeWeek(ctx: Ctx, weekStartDay: string) {
       if (l.employee_id === s.employee_id && new Date(s.start_at) < new Date(l.end_at) && new Date(l.start_at) < new Date(s.end_at))
         conflicts.push({ type: "LEAVE", employee_id: s.employee_id, day: vnDayKey(s.start_at), shift_ids: [s.id], message: `${nameOf(s.employee_id)} có ca trong ngày nghỉ phép ${fmtShortDay(vnDayKey(s.start_at))}.` });
 
+  const branchRows = await q<any>("SELECT id, name FROM branches WHERE id = ANY($1)", [ctx.branchFilter]);
+  for (const br of branchRows) {
   for (let i = 0; i < 7; i++) {
     const day = addDays(weekStartDay, i);
     for (const [key, t] of Object.entries(tpl)) {
       const ss = vnToDate(day, t.start);
       const se = vnToDate(day, t.end);
-      const inSlot = shifts.filter((s: any) => s.status === "APPROVED" && new Date(s.start_at) < se && new Date(s.end_at) > ss);
+      const inSlot = shifts.filter((s: any) => s.branch_id === br.id && s.status === "APPROVED" && new Date(s.start_at) < se && new Date(s.end_at) > ss);
       const staffIds = [...new Set(inSlot.map((s: any) => s.employee_id))];
       const need = minStaff[key] ?? 0;
       if (staffIds.length < need) {
         const hasTech = staffIds.some((id) => emps.find((e: any) => e.id === id)?.position === "TECHNICIAN");
         const dow = dowOfDay(day);
         const candidates = emps
+          .filter((e: any) => e.branch_id === br.id)
           .filter((e: any) => !shifts.some((s: any) => s.employee_id === e.id && vnDayKey(s.start_at) === day && s.status !== "CANCELLED"))
           .filter((e: any) => !leaves.some((l: any) => l.employee_id === e.id && new Date(l.start_at) < se && new Date(l.end_at) > ss))
           .filter((e: any) => (e.availability?.days ?? [0, 1, 2, 3, 4, 5, 6]).includes(dow) && (e.availability?.slots ?? ["S", "C"]).includes(key))
@@ -575,7 +578,8 @@ export async function analyzeWeek(ctx: Ctx, weekStartDay: string) {
           type: "UNDERSTAFFED",
           day,
           slot: key,
-          message: `Ca ${t.label} ${WEEKDAY_LABEL[dow]} (${fmtShortDay(day)}) có ${staffIds.length}/${need} nhân sự${hasTech ? "" : ", chưa có kỹ thuật viên"}.`,
+          branch_id: br.id,
+          message: `${branchRows.length > 1 ? br.name + ": " : ""}Ca ${t.label} ${WEEKDAY_LABEL[dow]} (${fmtShortDay(day)}) có ${staffIds.length}/${need} nhân sự${hasTech ? "" : ", chưa có kỹ thuật viên"}.`,
         };
         gaps.push(gap);
         const c = candidates[0];
@@ -592,6 +596,7 @@ export async function analyzeWeek(ctx: Ctx, weekStartDay: string) {
       }
     }
   }
+  }
   return { conflicts, gaps, suggestions };
 }
 
@@ -605,7 +610,7 @@ export async function buildReportContent(qq: Q, o: { tenantId: string; branchIds
     [o.tenantId, o.branchIds, vnToDate(o.day), dayEnd],
   );
   const onLeave = await qq<any>("SELECT DISTINCT employee_id FROM leaves WHERE tenant_id=$1 AND start_at < $3 AND end_at > $2", [o.tenantId, vnToDate(o.day), dayEnd]);
-  const ts = await taskStats(qq, o.tenantId, o.branchIds, cutoff);
+  const ts = await taskStats(qq, o.tenantId, o.branchIds, cutoff, null, vnToDate(addDays(o.day, -6)));
   const appts = await qq<any>(
     `SELECT a.*, c.display_name AS customer FROM appointments a JOIN customers c ON c.id=a.customer_id
       WHERE a.tenant_id=$1 AND a.branch_id = ANY($2) AND a.start_at >= $3 AND a.start_at < $4 ORDER BY a.start_at`,

@@ -90,7 +90,7 @@ export default function PeoplePage() {
                             <td data-label="#">{i + 1}</td>
                             <td data-label="Nhân sự">
                               <span className="row" style={{ gap: 10, flexWrap: "nowrap" }}>
-                                <Avatar name={e.display_name} /> <b style={{ fontWeight: 500 }}>{e.display_name}</b>
+                                <Avatar name={e.display_name} src={e.avatar} /> <b style={{ fontWeight: 500 }}>{e.display_name}</b>
                               </span>
                             </td>
                             <td data-label="Vị trí">
@@ -157,7 +157,7 @@ function Detail({ id, onClose, onChanged }: { id: string; onClose: () => void; o
       </div>
       <div className="card-body stack" style={{ gap: 14 }}>
         <div className="row" style={{ gap: 16, alignItems: "center" }}>
-          <Avatar name={e.display_name} size="lg" />
+          <Avatar name={e.display_name} src={e.avatar} size="lg" />
           <div style={{ flex: 1, minWidth: 0 }}>
             <h3 style={{ fontSize: 22 }}>{e.display_name}</h3>
             <div className="row mt-8">

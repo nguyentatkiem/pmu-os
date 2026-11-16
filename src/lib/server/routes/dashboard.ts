@@ -22,8 +22,8 @@ export const routes: RouteDef[] = [
       ctx.require("dashboard.view", "Bạn không có quyền xem tổng quan điều hành.");
       const { day, cutoff } = resolveCutoff(ctx, query.get("date"));
       const staff = await q<any>("SELECT count(*)::int AS n FROM employees WHERE tenant_id=$1 AND branch_id = ANY($2) AND active", [ctx.tenantId, ctx.branchFilter]);
-      const ts = await taskStats(q, ctx.tenantId, ctx.branchFilter, cutoff);
       const from = addDays(day, -6);
+      const ts = await taskStats(q, ctx.tenantId, ctx.branchFilter, cutoff, null, vnToDate(from));
       const weekly: { day: string; created: number; done: number }[] = [];
       for (let i = 0; i < 7; i++) {
         const d = addDays(from, i);
@@ -40,6 +40,11 @@ export const routes: RouteDef[] = [
         [ctx.tenantId, ctx.branchFilter, vnToDate(from), cutoff],
       );
       for (const w of weekly) w.created = created.filter((r) => vnDayKey(r.biz_created_at) === w.day).length;
+      const completed = await q<any>(
+        "SELECT completed_at FROM tasks WHERE tenant_id=$1 AND branch_id = ANY($2) AND status='DONE' AND completed_at >= $3 AND completed_at <= $4",
+        [ctx.tenantId, ctx.branchFilter, vnToDate(from), cutoff],
+      );
+      for (const w of weekly) w.done = completed.filter((r) => vnDayKey(r.completed_at) === w.day).length;
 
       const tomorrow = addDays(day, 1);
       const appts = await q<any>(
@@ -50,8 +55,15 @@ export const routes: RouteDef[] = [
       const tmr = appts.filter((a) => vnDayKey(a.start_at) === tomorrow);
       const confirmedTmr = tmr.filter((a) => ["CONFIRMED", "ARRIVED", "COMPLETED"].includes(a.status)).length;
       const issues: any[] = [];
-      for (const t of ts.overdue)
-        issues.push({ tone: "danger", title: `Có ${ts.overdue.length === 1 ? "1 công việc" : ts.overdue.length + " công việc"} đã quá hạn.`, detail: `${t.code} “${t.title}” — ${t.owner_name}, hạn ${fmtDateTime(t.due_at)}. Vui lòng kiểm tra và phân công xử lý.`, source: { label: `Công việc #${t.code}`, href: `/tasks?open=${t.id}` } });
+      if (ts.overdue.length) {
+        const t = ts.overdue[0];
+        issues.push({
+          tone: "danger",
+          title: `Có ${ts.overdue.length} công việc đã quá hạn.`,
+          detail: ts.overdue.slice(0, 3).map((x: any) => `${x.code} “${x.title}” — ${x.owner_name}, hạn ${fmtDateTime(x.due_at)}`).join("; ") + (ts.overdue.length > 3 ? `; và ${ts.overdue.length - 3} việc khác.` : ". Vui lòng kiểm tra và phân công xử lý."),
+          source: { label: `Công việc #${t.code}`, href: `/tasks?filter=overdue` },
+        });
+      }
       const pendingTmr = tmr.filter((a) => a.status === "PENDING");
       if (pendingTmr.length)
         issues.push({ tone: "warn", title: "Kiểm tra lịch ngày mai.", detail: `${pendingTmr.length}/${tmr.length} lịch ngày ${fmtDate(vnToDate(tomorrow))} chưa xác nhận: ${pendingTmr.map((a) => a.customer).join(", ")}.`, source: { label: `Lịch hẹn #${pendingTmr[0].code}`, href: `/appointments?date=${tomorrow}` } });

@@ -28,7 +28,11 @@ import {
   ChevronDown,
   KeyRound,
   Image as ImageIcon,
+  Bot,
+  Brain,
 } from "lucide-react";
+import { ChatWidget } from "./AgentChat";
+import FlowStrip from "./FlowStrip";
 import { api, setApiBranch } from "@/lib/client/api";
 import { AppCtx, Avatar, Field, Modal, type Me, useToast, PageSkeleton, useApp } from "./ui";
 import { fmtDateTime } from "@/lib/shared/format";
@@ -45,6 +49,8 @@ const NAV: { href: string; label: string; icon: React.ElementType; show: (me: Me
   { href: "/appointments", label: "Lịch hẹn", icon: CalendarClock, show: (m, c) => c("appointments.view_all") || !!m.user.employee_id },
   { href: "/care", label: "Chăm sóc", icon: Heart, show: (_, c) => c("care.view") },
   { href: "/reports", label: "Báo cáo", icon: FileChartColumn, show: (_, c) => c("reports.view") },
+  { href: "/agents", label: "AI Agent", icon: Bot, show: (_, c) => c("approvals.view") },
+  { href: "/brain", label: "Bộ não thứ 2", icon: Brain, show: (_, c) => c("approvals.view") },
   { href: "/assistant", label: "AI Assistant", icon: Sparkles, show: (_, c) => c("assistant.use") },
   { href: "/approvals", label: "Phê duyệt", icon: ShieldCheck, show: (_, c) => c("approvals.view") },
   { href: "/settings", label: "Cài đặt", icon: Settings, show: (_, c) => c("settings.view") },
@@ -153,8 +159,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <div className="main">
           {offline && <div className="offline-bar">Mất kết nối mạng — dữ liệu có thể chưa cập nhật. Thao tác sẽ không được lưu cho đến khi có mạng.</div>}
           <Topbar onMenu={() => setDrawer(true)} />
-          <div className="demo-strip mobile-block">{me.tenant.mode === "DEMO" ? "DỮ LIỆU MÔ PHỎNG · không phải dữ liệu thật" : "DỮ LIỆU DOANH NGHIỆP"}</div>
+          <div className="demo-strip mobile-block">{me.simulated ? "DỮ LIỆU MÔ PHỎNG · không phải dữ liệu thật" : "DỮ LIỆU DOANH NGHIỆP"}</div>
           <main className="content" id="noi-dung">
+            <FlowStrip />
             <Suspense fallback={<PageSkeleton />}>
               <React.Fragment key={`${branch}:${me.user.id}`}>{children}</React.Fragment>
             </Suspense>
@@ -169,6 +176,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <span>NGUYỄN TẤT KIỂM - TAKI.VN</span>
           </footer>
         </div>
+        <ChatWidget />
       </div>
     </AppCtx.Provider>
   );
@@ -224,10 +232,13 @@ function Topbar({ onMenu }: { onMenu: () => void }) {
           </select>
         </div>
         <div className="spacer" />
-        <span className={`demo-badge top ${m.tenant.mode === "DEMO" ? "" : "real"}`} title={m.tenant.mode === "DEMO" ? `Dữ liệu mô phỏng, không phải dữ liệu thật. Giờ demo: ${fmtDateTime(now())}` : "Dữ liệu doanh nghiệp"}>
+        <span
+          className={`demo-badge top ${m.simulated ? "" : "real"}`}
+          title={m.tenant.mode === "DEMO" ? `Dữ liệu mô phỏng, không phải dữ liệu thật. Giờ demo: ${fmtDateTime(now())}` : m.simulated ? "Tài khoản thật đang chứa bộ dữ liệu mô phỏng (tên hư cấu). Xóa tại Cài đặt › Dữ liệu mô phỏng." : "Dữ liệu doanh nghiệp"}
+        >
           <Database size={18} />
-          <span className="desktop-only">{m.tenant.mode === "DEMO" ? "DỮ LIỆU MÔ PHỎNG" : "DỮ LIỆU DOANH NGHIỆP"}</span>
-          <span className="mobile-inline">{m.tenant.mode === "DEMO" ? "MÔ PHỎNG" : "THẬT"}</span>
+          <span className="desktop-only">{m.simulated ? "DỮ LIỆU MÔ PHỎNG" : "DỮ LIỆU DOANH NGHIỆP"}</span>
+          <span className="mobile-inline">{m.simulated ? "MÔ PHỎNG" : "THẬT"}</span>
         </span>
         <div className="spacer desktop-only" />
         <button className="icon-btn" onClick={() => setSearch(true)} aria-label="Tìm kiếm (Ctrl+K)">
@@ -382,22 +393,23 @@ function HelpModal({ onClose }: { onClose: () => void }) {
         <div className="banner warn">
           <Database />
           <div>
-            Đây là bản demo với <b>DỮ LIỆU MÔ PHỎNG</b> (Nhân sự A–H, Khách mẫu A–F). Mỗi lượt “Khám phá bản demo” có một doanh nghiệp demo riêng, lưu thật trên cơ sở dữ liệu, có thể đặt lại. Zalo
-            chưa kết nối: mọi tin gửi khách chỉ ở trạng thái bản nháp hoặc chờ duyệt.
+            Dữ liệu đang hiển thị là <b>DỮ LIỆU MÔ PHỎNG</b>: hai chi nhánh, 22 nhân sự và hàng trăm khách mang tên hư cấu, số điện thoại không có thật. Bản demo có thể đặt lại; tài khoản thật xóa
+            được tại Cài đặt › Dữ liệu mô phỏng. Zalo chưa kết nối: mọi tin gửi khách chỉ ở trạng thái bản nháp hoặc chờ duyệt.
           </div>
         </div>
         <div>
           <b>Hành trình gợi ý:</b>
           <ol style={{ margin: "6px 0 0", paddingLeft: 20 }}>
-            <li>Tổng quan: 8 nhân sự, 24 việc (20 xong, 3 đang làm đúng hạn, 1 quá hạn).</li>
-            <li>AI Assistant: hỏi “Hôm nay doanh nghiệp có vấn đề gì?” → gửi đề xuất giao việc cho quản lý duyệt.</li>
+            <li>Tổng quan: số việc, lịch hẹn, phản hồi 7 ngày gần nhất của hai chi nhánh.</li>
+            <li>Nút “Giao việc AI” góc phải: gõ “Giao Nguyễn Thị Lan gọi xác nhận lịch ngày mai trước 10:00” → trợ lý tạo đề xuất chờ duyệt.</li>
+            <li>AI Agent: chạy Agent Nhân sự / Chăm sóc khách / Báo cáo / Đào tạo SOP, xem nhật ký, dừng khẩn cấp.</li>
             <li>Phê duyệt: duyệt đề xuất đổi ca / xuất bản SOP; duyệt hai lần không thực thi hai lần.</li>
-            <li>Đổi vai trò (menu tài khoản) sang Nhân sự G để nhận việc, đánh dấu checklist, nộp kết quả; quay lại Chủ doanh nghiệp để duyệt.</li>
+            <li>Bản demo: đổi vai trò (menu tài khoản) sang một kỹ thuật viên để nhận việc, đánh dấu checklist, nộp kết quả; quay lại Chủ doanh nghiệp để duyệt.</li>
             <li>Lịch hẹn: thử đặt trùng giờ để thấy cảnh báo và gợi ý giờ trống.</li>
           </ol>
         </div>
         <div>
-          <b>AI:</b> chạy chế độ quy tắc có nguồn, chưa nối nhà cung cấp mô hình. AI chỉ đề xuất; quyết định do con người duyệt.
+          <b>AI:</b> có khóa Claude thì trợ lý dùng Claude với công cụ tra dữ liệu theo quyền; chưa có khóa thì chạy chế độ quy tắc có nguồn. AI chỉ đề xuất; quyết định do con người duyệt.
         </div>
         <div>
           <b>Phím tắt:</b> Ctrl/⌘ + K để tìm kiếm. Esc để đóng cửa sổ.

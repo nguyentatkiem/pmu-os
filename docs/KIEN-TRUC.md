@@ -7,7 +7,7 @@
 | 1 | Next.js 16 + React 19 + TypeScript, một dự án cho cả giao diện và API | Đúng gợi ý mục 10 của bản mô tả; triển khai một lệnh trên Vercel |
 | 2 | PostgreSQL (Neon) khi chạy thật, PGlite khi chạy máy cá nhân | Cùng một bộ SQL, không cần Docker |
 | 3 | Mỗi lượt “Khám phá bản demo” tạo một doanh nghiệp demo riêng | Tách dữ liệu giữa người xem; minh họa tenancy (AC01); tự xóa sau 3 ngày không dùng |
-| 4 | Đồng hồ demo bắt đầu 17:30 ngày 15/11/2026 và chạy theo thời gian thực | Bộ số 8/24/20/3/1 luôn khớp đặc tả lúc mở demo |
+| 4 | Đồng hồ demo bắt đầu 17:30 ngày 15/11/2026 và chạy theo thời gian thực | Dữ liệu mô phỏng dày được sinh quanh mốc giờ demo nên luôn có việc hôm nay, lịch ngày mai, tin Zalo mới |
 | 5 | AI chế độ quy tắc có nguồn | Chưa chốt nhà cung cấp/ngân sách AI (mục 14); đảm bảo trả lời có nguồn, không bịa |
 | 6 | Không có tiến trình nền liên tục trên Vercel | Hàng đợi nhắc chạy bằng nút “Chạy hàng đợi đến hạn” (Cài đặt → Nhật ký) |
 

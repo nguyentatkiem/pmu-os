@@ -13,7 +13,7 @@ const TP_TONE: Record<string, string> = { TO_CONTACT: "red", WAITING_REPLY: "gol
 
 export default function CarePage() {
   const sp = useSearchParams();
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState("open");
   const [sel, setSel] = useState<string | null>(sp.get("open"));
   const [creating, setCreating] = useState(false);
   const q = useApi<any>(`/care${qs({ status })}`, [status]);
@@ -53,6 +53,7 @@ export default function CarePage() {
                   </h2>
                   <div className="right">
                     <select className="select" style={{ width: 190, height: 38 }} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Lọc trạng thái">
+                      <option value="open">Cần xử lý & 7 ngày tới</option>
                       <option value="">Tất cả trạng thái</option>
                       {Object.entries(TOUCHPOINT_STATUS_LABEL).map(([k, v]) => (
                         <option key={k} value={k}>

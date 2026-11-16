@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, BookOpen, CalendarDays, CheckCircle2, CircleCheck, CircleX, ClipboardList, Clock, FileClock, Layers, List, MessageCircle, RefreshCw, RotateCcw, ShieldCheck, Sparkles, UserRound, X, Ellipsis, Circle } from "lucide-react";
 import { api, useApi } from "@/lib/client/api";
 import { Badge, DesignRefButton, Empty, PageHead, PageState, Skeleton, SourceChip, Stat, useAction } from "@/components/ui";
@@ -16,10 +17,40 @@ export default function ApprovalsPage() {
   const [owner, setOwner] = useState("");
   const [sel, setSel] = useState<string | null>(null);
   const q = useApi<any>(`/approvals${qs({ tab, type, owner })}`, [tab, type, owner]);
+  const want = useRef<string | null>(null);
+  const openId = useSearchParams().get("open");
+  // Mở thẳng một đề xuất từ khung chat AI / trang AI Agent: /approvals?open=<id>
   useEffect(() => {
-    if (q.data && (!sel || !q.data.items.some((x: any) => x.id === sel))) setSel(q.data.items[0]?.id ?? null);
+    const id = openId;
+    if (!id) return;
+    want.current = id;
+    api(`/approvals/${id}`)
+      .then((r) => {
+        const st = r.proposal.status;
+        setType("");
+        setOwner("");
+        setTab(st === "PENDING" ? "pending" : ["APPROVED", "EXECUTED", "FAILED"].includes(st) ? "approved" : ["REJECTED", "RETURNED"].includes(st) ? "rejected" : "history");
+        q.reload();
+      })
+      .catch(() => (want.current = null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openId]);
+  useEffect(() => {
+    if (!q.data) return;
+    if (want.current && q.data.items.some((x: any) => x.id === want.current)) {
+      setSel(want.current);
+      want.current = null;
+      return;
+    }
+    if (!sel || !q.data.items.some((x: any) => x.id === sel)) setSel(q.data.items[0]?.id ?? null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q.data]);
+  useEffect(() => {
+    const h = () => q.reload();
+    window.addEventListener("pmu:proposals-changed", h);
+    return () => window.removeEventListener("pmu:proposals-changed", h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <>
       <PageHead title="Phê duyệt & Lịch sử AI" sub="Xem, phê duyệt và theo dõi các đề xuất do AI và nhân sự tạo ra trước khi áp dụng" actions={<DesignRefButton refKey="approvals" />} />

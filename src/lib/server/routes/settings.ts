@@ -7,6 +7,8 @@ import { getMessagingAdapter, integrationRow, runDueJobs } from "../domain";
 import { DEFAULT_MATRIX, PERMISSIONS, resolvePerms } from "../../shared/perms";
 import { ROLES, ROLE_LABEL } from "../../shared/labels";
 import { ENGINE_LABEL } from "../ai";
+import { aiStatus } from "../agent-chat";
+import { clearSimulatedData, seedRealTenant } from "../seed";
 
 async function saveSettings(ctx: Ctx, patch: Partial<TenantSettings>) {
   const t = await one<any>("SELECT settings FROM tenants WHERE id=$1", [ctx.tenantId]);
@@ -61,7 +63,12 @@ export const routes: RouteDef[] = [
           capabilities: adapter.capabilities(),
           has_secret: !!integ.credential_secret_ref,
         },
-        ai: { engine: ENGINE_LABEL, provider: null },
+        ai: { engine: ENGINE_LABEL, provider: null, ...(await aiStatus(ctx)) },
+        simulated: {
+          mode: tenant?.mode,
+          active: tenant?.mode === "DEMO" || !!ctx.settings.simulated_data,
+          can_toggle: tenant?.mode === "REAL" && ctx.role === "OWNER",
+        },
         jobs: Object.fromEntries(jobs.map((x) => [x.status, x.n])),
         db: await dbKind(),
         can_manage: ctx.can("settings.manage"),
@@ -274,6 +281,30 @@ export const routes: RouteDef[] = [
         ...r,
         message: `Đã xử lý ${r.processed} lượt: ${r.blocked} bị chặn, ${r.waiting} chờ, ${r.cancelled} hủy, ${r.sent} đã gửi.`,
       };
+    },
+  },
+  {
+    method: "POST",
+    path: "/settings/simulated/seed",
+    handler: async ({ ctx, body }) => {
+      if (ctx.mode !== "REAL" || ctx.role !== "OWNER") throw forbidden("Chỉ chủ doanh nghiệp (tài khoản thật) được nạp dữ liệu mô phỏng.");
+      if (body.confirm !== "NAP") throw bad("Cần xác nhận bằng chữ NAP.", { confirm: "Gõ NAP để xác nhận" });
+      const r = await seedRealTenant(ctx.tenantId);
+      if (!r.seeded) throw conflict(r.reason ?? "Không nạp được dữ liệu mô phỏng.");
+      await audit(ctx, "simulated.seed", "tenant", ctx.tenantId);
+      return { ok: true, message: "Đã nạp bộ DỮ LIỆU MÔ PHỎNG (2 chi nhánh, 22 nhân sự, 560 khách hư cấu)." };
+    },
+  },
+  {
+    method: "POST",
+    path: "/settings/simulated/clear",
+    handler: async ({ ctx, body }) => {
+      if (ctx.mode !== "REAL" || ctx.role !== "OWNER") throw forbidden("Chỉ chủ doanh nghiệp (tài khoản thật) được xóa dữ liệu mô phỏng.");
+      if (body.confirm !== "XOA") throw bad("Cần xác nhận bằng chữ XOA.", { confirm: "Gõ XOA để xác nhận" });
+      if (!ctx.settings.simulated_data) throw conflict("Doanh nghiệp không đang dùng dữ liệu mô phỏng; không xóa để tránh mất dữ liệu thật.");
+      await clearSimulatedData(ctx.tenantId);
+      await audit(ctx, "simulated.clear", "tenant", ctx.tenantId);
+      return { ok: true, message: "Đã xóa toàn bộ dữ liệu mô phỏng. Tài khoản chủ và một chi nhánh được giữ lại." };
     },
   },
 ];

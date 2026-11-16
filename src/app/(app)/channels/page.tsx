@@ -177,10 +177,10 @@ export default function ChannelsPage() {
                           <b>
                             {f.key} · {f.name}
                           </b>
-                          <span>{f.weight}%</span>
+                          <span>{f.weight === null || f.weight === undefined ? "chưa chốt tỷ trọng" : `${f.weight}%`}</span>
                         </div>
                         <div className="progress gold" style={{ marginTop: 4 }}>
-                          <span style={{ width: `${f.weight}%` }} />
+                          <span style={{ width: `${f.weight ?? 0}%` }} />
                         </div>
                         <div className="tiny muted mt-8">
                           {f.stage}. {f.desc}

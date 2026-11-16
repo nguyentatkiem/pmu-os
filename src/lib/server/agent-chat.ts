@@ -162,11 +162,11 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: "de_xuat_video_kenh",
     description:
-      "Tạo ĐỀ XUẤT video mới cho kênh “Tiệm nói thật” (chờ duyệt). Luật: phim tình huống tại tiệm phun xăm, hài trước, câu cuối là câu nói thật của thợ; 2 clip 15 giây, mỗi clip 33–38 từ (5 lượt lời thì tối đa 30 từ), mỗi câu dưới 12 từ; dạng A khách đòi thợ từ chối, B ca khó nói thật, C giải nghề (Phụ Tá hỏi), D chuyện tiệm; không nêu giá, ưu đãi, không hứa kết quả, không dùng “nhất”, không trước/sau, không tiêm tê, không tên người/tiệm/kênh có thật, không chê ngoại hình; chỉ dùng nhân vật của kênh (Thợ Chính, Phụ Tá, Khách Mê Ảnh Mạng, Cô Dâu Vội, Chị Mày Hỏng, Anh Văn Phòng, Cô U58). Câu chuyên môn sẽ tự đánh dấu chờ thợ duyệt.",
+      "Tạo ĐỀ XUẤT video mới cho kênh “Tiệm nói thật” (chờ duyệt). Luật: phim tình huống tại tiệm phun xăm, hài trước, câu cuối là câu nói thật của thợ; 2 clip 15 giây, mỗi clip 33–38 từ (5 lượt lời thì tối đa 30 từ), mỗi câu dưới 12 từ; dạng A khách đòi thợ từ chối, B ca khó nói thật, C giải nghề (Phụ Tá hỏi), D chuyện tiệm, E anh thợ lãng tử do chủ kênh đóng (người nói ghi “Anh”), hài nhây, không lời chuyên môn; không nêu giá, ưu đãi, không hứa kết quả, không dùng “nhất”, không trước/sau, không tiêm tê, không tên người/tiệm/kênh có thật, không chê ngoại hình; chỉ dùng nhân vật của kênh (Thợ Chính, Phụ Tá, Khách Mê Ảnh Mạng, Cô Dâu Vội, Chị Mày Hỏng, Anh Văn Phòng, Cô U58). Câu chuyên môn sẽ tự đánh dấu chờ thợ duyệt.",
     input_schema: {
       type: "object",
       properties: {
-        dang: { type: "string", enum: ["A", "B", "C", "D"] },
+        dang: { type: "string", enum: ["A", "B", "C", "D", "E"] },
         ma_video: { type: "string", description: "Mã video ý tưởng đã có trong lô (ví dụ A2) nếu viết kịch bản cho ý tưởng đó" },
         tieu_de: { type: "string", description: "Tên tập ngắn" },
         tieu_de_do: { type: "string", description: "Tiêu đề đỏ trên video, tối đa 40 ký tự" },

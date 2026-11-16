@@ -2,6 +2,7 @@
 // lô video, kiểm duyệt trước khi đăng, phễu khách hàng.
 // Video thật nằm trên máy chạy phần mềm (thư mục media), chỉ phát cho người đã đăng nhập; không đưa lên mã nguồn.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
 import path from "node:path";
 import { q, one, uid, j, type Q } from "./db";
@@ -25,7 +26,11 @@ export const FORMAT_LABEL: Record<string, string> = {
   B: "B · Ca khó, nói thật",
   C: "C · Giải nghề",
   D: "D · Chuyện tiệm",
+  E: "E · Anh thợ lãng tử (@Tôi)",
 };
+const FORMAT_E = { key: "E", name: "Anh thợ lãng tử (@Tôi)", weight: null, stage: "Đầu phễu: kéo người xem mới, gắn với gương mặt chủ kênh", desc: "Chủ kênh đóng anh thợ tạo mẫu lông mày lãng tử bằng mặt và giọng thật (thẻ @Tôi), hài nhây: hỏi chuyện thực tế thì đáp bằng “tâm hồn”, câu cuối trả lời thật. Không lời chuyên môn, không tên thật, không chữ TAKI trên hình." };
+const RULE_E = "Dạng E dùng mặt và giọng thật của chủ kênh theo yêu cầu của chính chủ (16/11/2026); không đưa tên thật hay chữ TAKI lên hình, nhãn trên hình “Tình huống minh hoạ · Video tạo bằng AI”.";
+const CHAR_E: [string, string, string, string, string, string, string | null] = ["Anh thợ lãng tử (@Tôi)", "Chủ kênh đóng: anh thợ tạo mẫu lông mày lãng tử, hài nhây", "E", "Giọng thật của chủ kênh (thẻ @Tôi)", "Áo lanh trắng ngà, ghi lê nâu, khăn lụa, vòng da, bút kẻ mày cài tai, thước vàng túi ngực", "CREATED", "16/11/2026"];
 
 // ---------------- Thư mục media trên máy ----------------
 export function mediaDir(): string | null {
@@ -112,6 +117,7 @@ const CH = {
     { key: "D", name: "Chuyện tiệm", weight: 30, stage: "Đầu phễu: kéo người xem mới", desc: "Hài thuần giữa thợ, phụ tá và khách, không nói chuyên môn." },
     { key: "B", name: "Ca khó, nói thật", weight: 20, stage: "Giữa phễu: xây niềm tin", desc: "Khách mang hậu quả cũ hoặc hiểu lầm phổ biến; thợ nói điều khách không muốn nghe." },
     { key: "C", name: "Giải nghề", weight: 10, stage: "Giữa phễu: giải đáp trước khi đặt lịch", desc: "Phụ tá hỏi thay khán giả, thợ trả lời bằng một ví dụ. Mỗi tập đúng một ý." },
+    FORMAT_E,
   ],
   rules: [
     "Không tạo ảnh hay video trước và sau, kết quả trên da, quy trình đi kim bằng AI.",
@@ -122,6 +128,7 @@ const CH = {
     "Không chê ngoại hình khách để gây cười; cười vào tình huống, không cười vào khuôn mặt.",
     "Không tạo nhân vật dưới 18 tuổi, không dựng cảnh hay mời dịch vụ có tiêm tê.",
     "Không đăng công khai khi chưa có người nghe lại lời, giọng và chưa có thợ thật duyệt câu chuyên môn.",
+    RULE_E,
   ],
   legal: [
     "Luật Quảng cáo 2012 Điều 8 khoản 9 và Luật 75/2025: cấm quảng cáo gây nhầm lẫn về chất lượng, công dụng.",
@@ -177,6 +184,7 @@ const CHARACTERS: [string, string, string, string, string, string, string | null
   ["Chị Mày Hỏng", "41 tuổi, từng làm hỏng mày nơi khác, đề phòng, hỏi vặn", "B", "Kore (dứt khoát)", "Mày phun cũ ngả xanh xám, tóc bob ngắn, blazer lanh màu be", "PLANNED", null],
   ["Anh Văn Phòng", "31 tuổi, lần đầu vào tiệm phun xăm, ngại, hay nói nhỏ", "A, B", "Puck (nam)", "Tóc ngắn gọn, mày thưa không đều, sơ mi xám xắn tay", "PLANNED", null],
   ["Cô U58", "58 tuổi, hiền, sợ đau, hay kể chuyện con cháu", "A, B", "Aoede (nhẹ nhàng)", "Tóc muối tiêu buộc thấp, mày rất mỏng nhạt, áo hoa tím", "PLANNED", null],
+  CHAR_E,
 ];
 
 type SeedVideo = {
@@ -440,9 +448,25 @@ function vnDay(d: Date) {
   return new Date(d.getTime() + 7 * 3600000).toISOString().slice(0, 10).replace(/-/g, "");
 }
 
+async function upgradeChannel(chId: string) {
+  const ch = await one<any>("SELECT formats, rules FROM mkt_channels WHERE id=$1", [chId]);
+  if (ch && !(ch.formats ?? []).some((f: any) => f.key === "E")) {
+    const rules = ch.rules ?? {};
+    await q("UPDATE mkt_channels SET formats=$2::jsonb, rules=$3::jsonb, updated_at=now() WHERE id=$1", [chId, j([...(ch.formats ?? []), FORMAT_E]), j({ ...rules, content: [...(rules.content ?? []), RULE_E] })]);
+  }
+  const has = await one<any>("SELECT id FROM mkt_characters WHERE channel_id=$1 AND name=$2", [chId, CHAR_E[0]]);
+  if (!has) {
+    const t = await one<any>("SELECT tenant_id FROM mkt_channels WHERE id=$1", [chId]);
+    await q("INSERT INTO mkt_characters (id, tenant_id, channel_id, name, role, formats, voice, description, status, created_on) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)", [uid(), t.tenant_id, chId, ...CHAR_E]);
+  }
+}
+
 export async function ensureMarketing(ctx: Ctx) {
   const r = await one<any>("SELECT id FROM mkt_channels WHERE tenant_id=$1 ORDER BY biz_created_at LIMIT 1", [ctx.tenantId]);
-  if (r) return r.id as string;
+  if (r) {
+    await upgradeChannel(r.id);
+    return r.id as string;
+  }
   if (!(ctx.mode === "DEMO" || ctx.settings.simulated_data)) return null;
   return seedMarketing(q, ctx.tenantId, ctx.now());
 }
@@ -450,9 +474,16 @@ export async function ensureMarketing(ctx: Ctx) {
 // ---------------- Nhập lô video mới từ thư mục máy (đầu ra của skill) ----------------
 export function parseEpisodeText(txt: string) {
   const first = txt.split("\n")[0] ?? "";
-  const code = /(?:TẬP THỬ|TIỂU PHẨM|TẬP)\s+([A-D]\d+)/i.exec(first)?.[1]?.toUpperCase() ?? null;
+  const code = /(?:TẬP THỬ|TIỂU PHẨM|TẬP)\s+([A-E]\d+)/i.exec(first)?.[1]?.toUpperCase() ?? null;
   const title = /[“"]([^”"]+)[”"]/.exec(first)?.[1] ?? null;
-  const format = (/dạng\s+([A-D])/i.exec(first)?.[1] ?? code?.[0] ?? "A").toUpperCase();
+  const format = (/dạng\s+([A-E])\b/i.exec(first)?.[1] ?? code?.[0] ?? "A").toUpperCase();
+  const partner = /Bạn diễn:\s*([^.(]+?)\s*(\(|\.|$)/m.exec(txt)?.[1]?.trim() ?? null;
+  const nhanVat = /Nhân vật:\s*([^.]+)\./m.exec(txt)?.[1] ?? "";
+  const characters = [
+    ...(/@Tôi/.test(first) ? ["Anh thợ lãng tử (@Tôi)"] : []),
+    ...(partner ? [partner] : []),
+    ...nhanVat.split(",").map((x) => x.replace(/\(.*?\)/g, "").trim()).filter(Boolean),
+  ];
   const headline = /Tiêu đề đỏ:\s*(.+)/.exec(txt)?.[1]?.trim() ?? null;
   const clips: ScriptClip[] = [];
   let cur: ScriptClip | null = null;
@@ -475,20 +506,20 @@ export function parseEpisodeText(txt: string) {
     for (let k = ci + 1; k < lines.length && /^\s{4,}\S/.test(lines[k]); k++) capLines.push(lines[k].trim());
   }
   const hashtags = /Hashtag:\s*(.+)/.exec(txt)?.[1]?.trim() ?? null;
-  return { code, title, format, headline, clips, caption: capLines.join("\n") || null, hashtags };
+  return { code, title, format, headline, clips, caption: capLines.join("\n") || null, hashtags, characters: [...new Set(characters)], me: /@Tôi/.test(first) };
 }
 
 export function scanMediaFolder() {
   const base = mediaDir();
   if (!base) return [];
-  const out: { dir: string; video: string; loi: string | null }[] = [];
+  const out: { dir: string; video: string; loi: string | null; clips: number }[] = [];
   for (const d of readdirSync(base)) {
     const full = path.join(base, d);
     if (d.startsWith(".") || !statSync(full).isDirectory()) continue;
     const files = readdirSync(full);
     const final = files.find((f) => /^tiem-noi-that-.*\.mp4$/.test(f));
     if (!final) continue;
-    out.push({ dir: d, video: `${d}/${final}`, loi: files.includes("loi.txt") ? readFileSync(path.join(full, "loi.txt"), "utf8") : null });
+    out.push({ dir: d, video: `${d}/${final}`, loi: files.includes("loi.txt") ? readFileSync(path.join(full, "loi.txt"), "utf8") : null, clips: files.filter((f) => /^t\d.*\.mp4$/.test(f)).length });
   }
   return out;
 }
@@ -512,11 +543,33 @@ export async function syncFromDisk(ctx: Ctx) {
     let code = p?.code ?? `X${added.length + 1}`;
     const dup = await one<any>("SELECT id FROM mkt_videos WHERE tenant_id=$1 AND channel_id=$2 AND code=$3", [ctx.tenantId, chId, code]);
     if (dup) code = `${code}-${f.dir.slice(0, 10)}`;
+    const full = resolveMedia(f.video);
+    let duration: number | null = null;
+    if (full) {
+      const pr = spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", full], { encoding: "utf8", env: { ...process.env, PATH: `${process.env.PATH ?? ""}:/opt/homebrew/bin:/usr/local/bin` } });
+      const n = Number(String(pr.stdout ?? "").trim());
+      if (Number.isFinite(n) && n > 0) duration = Math.round(n * 10) / 10;
+    }
+    const hasScript = (p?.clips ?? []).some((c) => c.lines.length);
+    const vid = uid();
+    const production: Record<string, string> = { nguon: `Thư mục máy: ${f.dir}`, mieng: "Chưa có người nghe bằng tai" };
+    if (p?.me) production.mat = "Mặt và giọng thật của chủ kênh (thẻ @Tôi)";
+    if (f.clips) production.clip = `${f.clips} clip Flow trong thư mục (≈ ${f.clips * 60} tín dụng theo giá đo 60/clip)`;
     await q(
-      `INSERT INTO mkt_videos (id, tenant_id, channel_id, batch_id, code, format, title, headline, situation, characters, script, caption, hashtags, status, production, media_ref, biz_created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,'PRODUCED',$14::jsonb,$15,$16)`,
-      [uid(), ctx.tenantId, chId, batchId, code, ["A", "B", "C", "D"].includes(p?.format ?? "") ? p!.format : "A", p?.title ?? f.dir, p?.headline ?? null, null, [], j(p?.clips ?? []), p?.caption ?? null, p?.hashtags ?? null, j({ nguon: `Thư mục máy: ${f.dir}` }), f.video, ctx.now()],
+      `INSERT INTO mkt_videos (id, tenant_id, channel_id, batch_id, code, format, title, headline, situation, characters, script, caption, hashtags, status, duration_s, credits, production, media_ref, biz_created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15,$16,$17::jsonb,$18,$19)`,
+      [vid, ctx.tenantId, chId, batchId, code, ["A", "B", "C", "D", "E"].includes(p?.format ?? "") ? p!.format : "A", p?.title ?? f.dir, p?.headline ?? null, null, p?.characters ?? [], j(p?.clips ?? []), p?.caption ?? null, p?.hashtags ?? null, hasScript ? "IN_REVIEW" : "PRODUCED", duration, f.clips * 60, j(production), f.video, ctx.now()],
     );
+    if (hasScript)
+      await q("INSERT INTO mkt_reviews (id, tenant_id, video_id, reviewer_id, reviewer_label, decision, reason, biz_at) VALUES ($1,$2,$3,$4,$5,'SUBMIT',$6,$7)", [
+        uid(),
+        ctx.tenantId,
+        vid,
+        ctx.userId,
+        ctx.actorLabel,
+        "Nhập từ thư mục máy (skill đã dựng xong), chờ người nghe bằng tai.",
+        ctx.now(),
+      ]);
     added.push(code);
   }
   return { added, skipped: found.length - added.length, available: true };
@@ -568,7 +621,7 @@ export async function funnel(ctx: Ctx) {
       views: null as number | null,
     },
     mapping: [
-      { stage: "Đầu phễu · Tiếp cận", formats: "D · Chuyện tiệm", goal: "Kéo người xem mới bằng tiểu phẩm hài", metric: "View, người xem mới (chưa nối nền tảng)" },
+      { stage: "Đầu phễu · Tiếp cận", formats: "D · Chuyện tiệm · E · Anh thợ lãng tử (@Tôi)", goal: "Kéo người xem mới bằng tiểu phẩm hài, gắn với gương mặt chủ kênh", metric: "View, người xem mới (chưa nối nền tảng)" },
       { stage: "Giữa phễu · Quan tâm, tư vấn", formats: "A · Khách đòi, thợ từ chối · B · Ca khó · C · Giải nghề", goal: "Xây niềm tin, trả lời trước câu hỏi hay gặp", metric: "Tin nhắn Zalo, khách mới nguồn TikTok/Facebook" },
       { stage: "Cuối phễu · Đặt lịch, dịch vụ", formats: "Video kết quả thật của tiệm (không dùng AI)", goal: "Bằng chứng thật, ghim đầu kênh", metric: "Lịch tư vấn, lịch dịch vụ" },
       { stage: "Sau dịch vụ · Quay lại, giới thiệu", formats: "Chăm sóc theo kế hoạch đã duyệt", goal: "Dặm màu, kiểm tra, giới thiệu", metric: "Điểm chạm chăm sóc, khách quay lại" },

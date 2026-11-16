@@ -364,7 +364,7 @@ async function execute(qq: Q, ctx: Ctx, p: any): Promise<Outcome> {
           return { status: "SUCCEEDED", result: { message: `Đã cập nhật kịch bản cho video ${ex.code}.`, video_id: ex.id } };
         }
       }
-      const fmt = ["A", "B", "C", "D"].includes(pl.format) ? pl.format : "A";
+      const fmt = ["A", "B", "C", "D", "E"].includes(pl.format) ? pl.format : "A";
       const codes = (await qq<any>("SELECT code FROM mkt_videos WHERE channel_id=$1 AND code LIKE $2", [ch.id, `${fmt}%`])).map((r) => Number(String(r.code).slice(1)) || 0);
       const code = `${fmt}${Math.max(0, ...codes) + 1}`;
       const id = uid();

@@ -6,7 +6,7 @@ import { api, useApi } from "@/lib/client/api";
 import { Badge, Drawer, Field, Skeleton, useAction } from "./ui";
 import { fmtDateTime } from "@/lib/shared/format";
 
-export const FORMAT_TONE: Record<string, string> = { A: "teal", B: "violet", C: "blue", D: "gold" };
+export const FORMAT_TONE: Record<string, string> = { A: "teal", B: "violet", C: "blue", D: "gold", E: "red" };
 export const STATUS_TONE: Record<string, string> = {
   IDEA: "gray",
   SCRIPTED: "blue",
@@ -192,6 +192,18 @@ export function VideoDrawer({ id, onClose, onChanged }: { id: string; onClose: (
                 <>
                   <dt>Nghe bằng tai</dt>
                   <dd>{v.production.mieng}</dd>
+                </>
+              )}
+              {v.production.mat && (
+                <>
+                  <dt>Diễn viên</dt>
+                  <dd>{v.production.mat}</dd>
+                </>
+              )}
+              {v.production.clip && (
+                <>
+                  <dt>Clip Flow</dt>
+                  <dd>{v.production.clip}</dd>
                 </>
               )}
               {v.production.nguon && (

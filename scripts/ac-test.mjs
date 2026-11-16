@@ -6,13 +6,26 @@ const ok = (id, name, pass, detail = "") => {
   console.log(`${pass ? "✅" : "❌"} ${id} ${name}${detail ? " — " + detail : ""}`);
 };
 
+// Thử lại khi chưa kết nối được tới máy chủ (request chưa được gửi đi nên an toàn để thử lại)
+async function netFetch(url, opts) {
+  for (let i = 0; ; i++) {
+    try {
+      return await fetch(url, opts);
+    } catch (e) {
+      const code = e?.cause?.code;
+      if (i >= 4 || !["UND_ERR_CONNECT_TIMEOUT", "ECONNREFUSED", "ENETUNREACH", "EHOSTUNREACH"].includes(code)) throw e;
+      await new Promise((r) => setTimeout(r, 800));
+    }
+  }
+}
+
 class Client {
   constructor() {
     this.cookie = "";
     this.branch = "all";
   }
   async req(method, path, body) {
-    const res = await fetch(`${BASE}/api${path}`, {
+    const res = await netFetch(`${BASE}/api${path}`, {
       method,
       headers: { "content-type": "application/json", cookie: this.cookie, "x-pmu-branch": this.branch },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -300,8 +313,8 @@ async function main() {
   const M = await new Client().demo();
   const mk = (await M.get("/marketing")).data;
   const vA1 = mk.batches.flatMap((b) => b.videos).find((v) => v.code === "A1");
-  const vres = await fetch(`${BASE}/api/media/video/${vA1.id}`, { headers: { cookie: M.cookie, range: "bytes=0-1023" } });
-  const anon = await fetch(`${BASE}/api/media/video/${vA1.id}`);
+  const vres = await netFetch(`${BASE}/api/media/video/${vA1.id}`, { headers: { cookie: M.cookie, range: "bytes=0-1023" } });
+  const anon = await netFetch(`${BASE}/api/media/video/${vA1.id}`);
   ok(
     "AG08",
     "Hệ thống Marketing: kênh Tiệm nói thật, 2 lô, 3 video bản thử chờ kiểm duyệt; video chỉ phát cho người đã đăng nhập",

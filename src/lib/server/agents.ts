@@ -6,6 +6,7 @@ import { forbidden } from "./http";
 import { analyzeWeek, buildReportContent, inboxSuggest } from "./ai";
 import { createProposal } from "./proposals";
 import { brainPropose, brainSearch, intentCounts } from "./brain";
+import { ensureMarketing, funnel, needsExpert, VIDEO_STATUS_LABEL } from "./marketing";
 import { addDays, fmtDate, fmtDateTime, fmtShortDay, fmtTime, vnDayKey, vnToDate, weekStart } from "../shared/format";
 
 export interface AgentDef {
@@ -54,6 +55,15 @@ export const AGENTS: AgentDef[] = [
     tools: ["Truy vấn số liệu theo phạm vi", "Tạo báo cáo nháp"],
     produces: ["Báo cáo nháp chờ duyệt"],
     icon: "FileChartColumn",
+  },
+  {
+    key: "channel",
+    name: "Agent Xây kênh",
+    mission: "Dựng và vận hành kênh video “Tiệm nói thật” (phun xăm, nhân vật AI trên Google Flow): lên lô video, kiểm luật kịch bản, theo dõi kiểm duyệt, đề xuất quyết định kênh và đọc phễu khách.",
+    scope: ["Kênh nội dung", "Lô video", "Kiểm duyệt", "Phễu"],
+    tools: ["Kiểm luật kịch bản (nhãn AI, không trước/sau, không hứa)", "Giao thợ thật duyệt câu chuyên môn", "Đề xuất quyết định kênh (L1)", "Đề xuất xếp lịch đăng (L1)"],
+    produces: ["Đề xuất chờ duyệt", "Phát hiện về lô video và phễu"],
+    icon: "Clapperboard",
   },
   {
     key: "sop",
@@ -113,6 +123,7 @@ export async function runAgent(ctx: Ctx, key: string, trigger: "manual" | "chat"
       if (key === "care") await runCare(ctx, out);
       if (key === "report") await runReport(ctx, out);
       if (key === "sop") await runSop(ctx, out);
+      if (key === "channel") await runChannel(ctx, out);
       summary = `${out.proposals.length} đề xuất mới, ${out.actions.length} thao tác tự động, ${out.findings.length} phát hiện.`;
     } catch (e: any) {
       status = "FAILED";
@@ -378,4 +389,71 @@ async function runSop(ctx: Ctx, out: RunOut) {
     [ctx.tenantId],
   );
   for (const p of pend) out.findings.push(`SOP “${p.title}” v${p.version_label} đang chờ người có thẩm quyền duyệt xuất bản.`);
+}
+
+// ---------- Agent Xây kênh ----------
+async function runChannel(ctx: Ctx, out: RunOut) {
+  const now = ctx.now();
+  const chId = await ensureMarketing(ctx);
+  if (!chId) {
+    out.findings.push("Chưa có kênh nội dung nào. Vào Đề xuất xây kênh để dựng kênh đầu tiên.");
+    return;
+  }
+  await recall(ctx, out, "kênh video phun xăm kiểm duyệt nhãn AI kịch bản", "channel");
+  const vids = await q<any>("SELECT id, code, title, status, script, expert_ok, biz_created_at, updated_at FROM mkt_videos WHERE tenant_id=$1 AND channel_id=$2", [ctx.tenantId, chId]);
+  const by = (s: string) => vids.filter((v) => v.status === s);
+  for (const v of by("IN_REVIEW")) {
+    const last = await q<any>("SELECT biz_at FROM mkt_reviews WHERE video_id=$1 ORDER BY biz_at DESC LIMIT 1", [v.id]);
+    const since = last[0] ? new Date(last[0].biz_at) : new Date(v.biz_created_at);
+    const hours = Math.round((now.getTime() - since.getTime()) / 3600000);
+    out.findings.push(`Video ${v.code} “${v.title}” chờ kiểm duyệt${hours >= 1 ? ` ${hours} giờ` : ""}: cần người nghe lời, giọng, khớp miệng.`);
+  }
+  // Câu chuyên môn chưa có thợ duyệt → giao thợ thật (L1)
+  const tech = (await q<any>("SELECT id, display_name, branch_id FROM employees WHERE tenant_id=$1 AND position='TECHNICIAN' AND active AND branch_id = ANY($2) ORDER BY code LIMIT 1", [ctx.tenantId, ctx.branchFilter]))[0];
+  for (const v of vids.filter((x) => ["SCRIPTED", "PRODUCED", "IN_REVIEW", "REVISE"].includes(x.status) && !x.expert_ok && needsExpert(x.script ?? []))) {
+    out.findings.push(`Video ${v.code} có câu chuyên môn chưa được thợ thật duyệt.`);
+    if (!tech) continue;
+    const lines = (v.script ?? []).flatMap((c: any) => c.lines ?? []).filter((l: any) => l.expert).map((l: any) => `Đọc câu: “${l.text}”`);
+    await tryPropose(ctx, out, {
+      action_type: "TASK_ASSIGN",
+      summary: `Giao ${tech.display_name} duyệt câu chuyên môn của video ${v.code} kênh Tiệm nói thật`,
+      payload: { title: `Duyệt câu chuyên môn video ${v.code} (kênh Tiệm nói thật)`, owner_id: tech.id, due_at: new Date(now.getTime() + 24 * 3600000).toISOString(), priority: "MEDIUM", checklist: [...lines.slice(0, 6), "Xác nhận đúng chuyên môn hoặc đề xuất câu thay", "Báo lại quản lý kênh"] },
+      reason: "Luật kênh: câu về độ bền, màu mực, thời gian bong phải được thợ thật duyệt trước khi đăng.",
+      source_refs: [{ type: "video", id: v.id, label: `Video ${v.code} · ${v.title}`, href: `/marketing?video=${v.id}` }],
+      requested_label: "Agent Xây kênh",
+      owner_employee_id: tech.id,
+      dedupe_key: `agent:channel:expert:${v.id}`,
+      agent: "channel",
+    });
+  }
+  // Video đã duyệt → đề xuất xếp lịch đăng khung 06:30 sáng kế tiếp
+  let slot = 1;
+  for (const v of by("APPROVED")) {
+    const dayKey = addDays(vnDayKey(now), slot++);
+    const at = vnToDate(dayKey, "06:30");
+    await tryPropose(ctx, out, {
+      action_type: "VIDEO_PUBLISH",
+      summary: `Xếp lịch đăng video ${v.code} “${v.title}” lúc 06:30 ${fmtDate(at)} (riêng tư trước)`,
+      payload: { video_id: v.id, scheduled_at: at.toISOString() },
+      reason: "Video đã qua kiểm duyệt. Khung 06:00–07:00 theo số đo kênh tham chiếu. Hệ thống chưa nối nền tảng: người phụ trách đăng thủ công, bật nhãn AI.",
+      source_refs: [{ type: "video", id: v.id, label: `Video ${v.code}`, href: `/marketing?video=${v.id}` }],
+      requested_label: "Agent Xây kênh",
+      before: { trang_thai: VIDEO_STATUS_LABEL.APPROVED },
+      after: { trang_thai: VIDEO_STATUS_LABEL.SCHEDULED, lich_dang: `06:30 ${fmtDate(at)}` },
+      target_type: "mkt_video",
+      target_id: v.id,
+      dedupe_key: `agent:channel:publish:${v.id}`,
+      agent: "channel",
+    });
+  }
+  // Lô kế tiếp: ý tưởng chưa có kịch bản, nhân vật chưa tạo
+  const ideas = by("IDEA");
+  if (ideas.length) out.findings.push(`${ideas.length} video ở lô kế hoạch mới là ý tưởng, chưa có kịch bản (${ideas.map((v) => v.code).join(", ")}). Có thể nhờ trợ lý chat viết kịch bản.`);
+  const planned = await q<any>("SELECT name FROM mkt_characters WHERE channel_id=$1 AND status<>'CREATED'", [chId]);
+  if (planned.length) out.findings.push(`${planned.length} nhân vật chưa tạo trên Flow: ${planned.map((c) => c.name).join(", ")}.`);
+  // Phễu: điểm nghẽn
+  const f = await funnel(ctx);
+  if (f.bottleneck && f.bottleneck.rate !== null)
+    out.findings.push(`Phễu: chặng ${f.bottleneck.from} → ${f.bottleneck.to} có tỷ lệ chuyển thấp nhất (${Math.round((f.bottleneck.rate as number) * 100)}%). Nội dung dạng A, B, C nhắm vào niềm tin trước khi đặt lịch.`);
+  if (!f.content.published) out.findings.push("Kênh chưa đăng video nào nên chưa có số view thật để nối với phễu.");
 }

@@ -30,6 +30,9 @@ import {
   Image as ImageIcon,
   Bot,
   Brain,
+  Megaphone,
+  Funnel,
+  Clapperboard,
 } from "lucide-react";
 import { ChatWidget } from "./AgentChat";
 import FlowStrip from "./FlowStrip";
@@ -51,6 +54,9 @@ const NAV: { href: string; label: string; icon: React.ElementType; show: (me: Me
   { href: "/reports", label: "Báo cáo", icon: FileChartColumn, show: (_, c) => c("reports.view") },
   { href: "/agents", label: "AI Agent", icon: Bot, show: (_, c) => c("approvals.view") },
   { href: "/brain", label: "Bộ não thứ 2", icon: Brain, show: (_, c) => c("approvals.view") },
+  { href: "/marketing", label: "Hệ thống Marketing", icon: Megaphone, show: (_, c) => c("marketing.view") },
+  { href: "/funnel", label: "Phễu", icon: Funnel, show: (_, c) => c("marketing.view") },
+  { href: "/channels", label: "Đề xuất xây kênh", icon: Clapperboard, show: (_, c) => c("marketing.view") },
   { href: "/assistant", label: "AI Assistant", icon: Sparkles, show: (_, c) => c("assistant.use") },
   { href: "/approvals", label: "Phê duyệt", icon: ShieldCheck, show: (_, c) => c("approvals.view") },
   { href: "/settings", label: "Cài đặt", icon: Settings, show: (_, c) => c("settings.view") },

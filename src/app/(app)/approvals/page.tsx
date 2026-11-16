@@ -371,8 +371,46 @@ function Detail({ id, onChanged }: { id: string; onChanged: () => void }) {
   );
 }
 
+const SNAP_LABEL: Record<string, string> = { giong: "Giọng vùng miền", toc_do: "Tốc độ dựng", nhan_vat: "Nhân vật", video: "Video", dang: "Dạng", lich_dang: "Lịch đăng", trang_thai: "Trạng thái", kiem_luat: "Kiểm luật" };
 function Snapshot({ v }: { v: any }) {
   if (!v) return <div className="small muted">—</div>;
+  if (Array.isArray(v.clips))
+    return (
+      <div className="small mt-8">
+        <b>{v.title}</b>
+        {v.headline && <div className="muted">Tiêu đề đỏ: {v.headline}</div>}
+        {v.clips.map((c: any, i: number) => (
+          <div key={i} className="mt-8">
+            <div className="tiny muted">{c.name}</div>
+            {(c.lines ?? []).map((l: any, k: number) => (
+              <div key={k}>
+                <b>{l.speaker}:</b> {l.text}
+                {l.expert && <span className="badge b-gold" style={{ marginLeft: 6 }}>Chờ thợ duyệt</span>}
+              </div>
+            ))}
+          </div>
+        ))}
+        {Array.isArray(v.checks) && v.checks.length > 0 && (
+          <div className="mt-8">
+            {v.checks.map((c: any, i: number) => (
+              <div key={i} style={{ color: c.level === "block" ? "var(--danger)" : c.level === "warn" ? "var(--warn)" : "var(--ok)" }}>
+                • {c.text}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  if (!v.employee && !v.body && !v.title && !v.status && !v.note && typeof v === "object")
+    return (
+      <div className="small mt-8">
+        {Object.entries(v).map(([k, val]) => (
+          <div key={k}>
+            <span className="muted">{SNAP_LABEL[k] ?? k}:</span> <b>{String(val)}</b>
+          </div>
+        ))}
+      </div>
+    );
   if (v.employee)
     return (
       <div className="mt-8">

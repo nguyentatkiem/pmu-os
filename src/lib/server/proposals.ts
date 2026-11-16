@@ -24,6 +24,9 @@ export const ACTION_PERMISSION: Record<string, string> = {
   CUSTOMER_MESSAGE: "inbox.reply",
   CARE_MESSAGE: "care.manage",
   SOP_PUBLISH: "knowledge.publish",
+  CHANNEL_DECISION: "marketing.manage",
+  VIDEO_IDEA: "marketing.manage",
+  VIDEO_PUBLISH: "marketing.review",
 };
 
 async function proposalCode(qq: Q, ctx: Ctx) {
@@ -326,6 +329,59 @@ async function execute(qq: Q, ctx: Ctx, p: any): Promise<Outcome> {
       await qq("UPDATE sop_versions SET status='ARCHIVED', updated_at=now(), version=version+1 WHERE document_id=$1 AND status='PUBLISHED'", [v.document_id]);
       await qq("UPDATE sop_versions SET status='PUBLISHED', approved_by=$2, effective_at=$3, updated_at=now(), version=version+1 WHERE id=$1", [v.id, ctx.userId, now]);
       return { status: "SUCCEEDED", result: { message: `Đã xuất bản phiên bản ${v.version_label}.` } };
+    }
+    case "CHANNEL_DECISION": {
+      const ch = (await qq<any>("SELECT * FROM mkt_channels WHERE id=$1 AND tenant_id=$2", [pl.channel_id, ctx.tenantId]))[0];
+      if (!ch) return { status: "FAILED", result: { message: "Kênh không còn tồn tại." } };
+      if (pl.key === "characters_create") {
+        const r = await qq<any>("UPDATE mkt_characters SET status='APPROVED' WHERE channel_id=$1 AND status='PLANNED' RETURNING name", [ch.id]);
+        return { status: "SUCCEEDED", result: { message: `Đã duyệt tạo ${r.length} nhân vật. Việc tạo trên Google Flow làm thủ công hoặc qua skill (0 tín dụng).` } };
+      }
+      const settings = { ...(ch.settings ?? {}), [pl.key]: pl.value };
+      const plan = ch.plan ?? {};
+      const pre = (plan.prerequisites ?? []).map((x: any) => (pl.key === "giong" && /giọng/i.test(x.text)) || (pl.key === "toc_do" && /tốc độ/i.test(x.text)) ? { ...x, done: true } : x);
+      await qq("UPDATE mkt_channels SET settings=$2::jsonb, plan=$3::jsonb, updated_at=now(), version=version+1 WHERE id=$1", [ch.id, j(settings), j({ ...plan, prerequisites: pre })]);
+      return { status: "SUCCEEDED", result: { message: `Đã chốt ${pl.label ?? pl.key}: ${pl.value}.` } };
+    }
+    case "VIDEO_IDEA": {
+      const ch = (await qq<any>("SELECT id FROM mkt_channels WHERE id=$1 AND tenant_id=$2", [pl.channel_id, ctx.tenantId]))[0];
+      if (!ch) return { status: "FAILED", result: { message: "Kênh không còn tồn tại." } };
+      let batch = (await qq<any>("SELECT id, code FROM mkt_batches WHERE channel_id=$1 AND status='PLANNING' ORDER BY biz_created_at DESC LIMIT 1", [ch.id]))[0];
+      if (!batch) {
+        const n = (await qq<any>("SELECT count(*)::int AS n FROM mkt_batches WHERE channel_id=$1", [ch.id]))[0].n + 1;
+        batch = { id: uid(), code: `LO-${String(n).padStart(2, "0")}` };
+        await qq("INSERT INTO mkt_batches (id, tenant_id, channel_id, code, title, status, note, biz_created_at) VALUES ($1,$2,$3,$4,$5,'PLANNING',$6,$7)", [batch.id, ctx.tenantId, ch.id, batch.code, `Lô ${String(n).padStart(2, "0")} · Kế hoạch`, "Tạo khi duyệt ý tưởng video.", now]);
+      }
+      const clipsIn = Array.isArray(pl.clips) ? pl.clips : [];
+      if (pl.video_id) {
+        const ex = (await qq<any>("SELECT id, code, status FROM mkt_videos WHERE id=$1 AND channel_id=$2", [pl.video_id, ch.id]))[0];
+        if (ex && ["IDEA", "SCRIPTED", "REVISE"].includes(ex.status)) {
+          await qq(
+            `UPDATE mkt_videos SET script=$2::jsonb, headline=coalesce($3, headline), caption=coalesce($4, caption), characters=CASE WHEN cardinality($5::text[])>0 THEN $5::text[] ELSE characters END,
+               situation=coalesce($6, situation), status=$7, updated_at=now(), version=version+1 WHERE id=$1`,
+            [ex.id, j(clipsIn), pl.headline ?? null, pl.caption ?? null, Array.isArray(pl.characters) ? pl.characters : [], pl.situation ?? null, clipsIn.length ? "SCRIPTED" : ex.status],
+          );
+          return { status: "SUCCEEDED", result: { message: `Đã cập nhật kịch bản cho video ${ex.code}.`, video_id: ex.id } };
+        }
+      }
+      const fmt = ["A", "B", "C", "D"].includes(pl.format) ? pl.format : "A";
+      const codes = (await qq<any>("SELECT code FROM mkt_videos WHERE channel_id=$1 AND code LIKE $2", [ch.id, `${fmt}%`])).map((r) => Number(String(r.code).slice(1)) || 0);
+      const code = `${fmt}${Math.max(0, ...codes) + 1}`;
+      const id = uid();
+      const clips = Array.isArray(pl.clips) ? pl.clips : [];
+      await qq(
+        `INSERT INTO mkt_videos (id, tenant_id, channel_id, batch_id, code, format, title, headline, situation, characters, script, caption, hashtags, status, biz_created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14,$15)`,
+        [id, ctx.tenantId, ch.id, batch.id, code, fmt, String(pl.title ?? "Ý tưởng mới").slice(0, 120), pl.headline ?? null, pl.situation ?? null, Array.isArray(pl.characters) ? pl.characters : [], j(clips), pl.caption ?? null, pl.hashtags ?? "#phunxamthammy #phunmay", clips.length ? "SCRIPTED" : "IDEA", now],
+      );
+      return { status: "SUCCEEDED", result: { message: `Đã thêm video ${code} vào ${batch.code} (${clips.length ? "có kịch bản" : "ý tưởng"}).`, video_id: id } };
+    }
+    case "VIDEO_PUBLISH": {
+      const v = (await qq<any>("SELECT * FROM mkt_videos WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [pl.video_id, ctx.tenantId]))[0];
+      if (!v) return { status: "FAILED", result: { message: "Video không còn tồn tại." } };
+      if (v.status !== "APPROVED") return { status: "FAILED", result: { message: "Video chưa ở trạng thái Đã duyệt nên chưa xếp lịch đăng." } };
+      await qq("UPDATE mkt_videos SET status='SCHEDULED', scheduled_at=$2, updated_at=now(), version=version+1 WHERE id=$1", [v.id, pl.scheduled_at ?? null]);
+      return { status: "SUCCEEDED", result: { message: "Đã xếp lịch đăng (riêng tư trước). Hệ thống chưa nối TikTok/Reels: người phụ trách đăng thủ công và bật nhãn nội dung do AI tạo." } };
     }
   }
   return { status: "FAILED", result: { message: "Loại hành động chưa hỗ trợ." } };

@@ -1,4 +1,4 @@
-# Nghiệm thu AC01–AC13 + AG01–AG07 (16/11/2026)
+# Nghiệm thu AC01–AC13 + AG01–AG10 (16/11/2026)
 
 Chạy: `BASE_URL=https://pmu-os-xi.vercel.app npm run test:ac` → **15/15 kiểm tra đạt** trên production (Neon PostgreSQL) và trên máy (PGlite).
 
@@ -28,7 +28,10 @@ Chạy: `BASE_URL=https://pmu-os-xi.vercel.app npm run test:ac` → **15/15 ki�
 | AG04 | Phân quyền agent | Kỹ thuật viên gọi chạy agent / Bộ não / luồng agent → 403 |
 | AG05 | Bộ não chỉ dùng mục đã duyệt | Bài học chờ duyệt không xuất hiện khi tra; duyệt xong mới xuất hiện |
 | AG06 | 20 hội thoại Zalo mô phỏng | 11 trả lời agent soạn đã được duyệt, 7 bản soạn sẵn chờ duyệt, 2 chuyển chuyên viên |
-| AG07 | Tin Zalo đến → agent xử lý; luồng trên Tổng quan | Mô phỏng tin đến → Agent CSKH tra Bộ não, soạn hoặc chuyển; Tổng quan đủ 4 làn |
+| AG07 | Tin Zalo đến → agent xử lý; luồng trên Tổng quan | Mô phỏng tin đến → Agent CSKH tra Bộ não, soạn hoặc chuyển; Tổng quan đủ 5 làn |
+| AG08 | Hệ thống Marketing | Kênh Tiệm nói thật, 2 lô, 3 video chờ kiểm duyệt; video phát được khi có file trên máy (206), máy chủ không có file thì báo 404; chưa đăng nhập 401 |
+| AG09 | Kiểm duyệt video | Thiếu bảng kiểm → 400; câu chuyên môn chưa thợ duyệt → 409; đủ → duyệt; Agent Xây kênh đề xuất lịch đăng; duyệt → video vào lịch |
+| AG10 | Đề xuất xây kênh và phễu | Duyệt quyết định giọng vùng miền → kế hoạch kênh cập nhật; phễu 8 chặng giảm dần, có điểm nghẽn |
 
 ## Giới hạn đã biết
 

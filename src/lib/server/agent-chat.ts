@@ -11,6 +11,7 @@ import { askAssistant, dailyBrief, norm, sopAnswer } from "./ai";
 import { createProposal } from "./proposals";
 import { runAgent, AGENT_NAME } from "./agents";
 import { brainSearch, BRAIN_KIND_LABEL } from "./brain";
+import { checkScript, ensureMarketing, FORMAT_LABEL, markExpert, VIDEO_STATUS_LABEL, type ScriptClip } from "./marketing";
 import { visibleCustomerIds } from "./domain";
 import { addDays, fmtDate, fmtDateTime, fmtTime, vnDayKey, vnToDate } from "../shared/format";
 import { APPT_STATUS_LABEL, POSITION_LABEL, READINESS_LABEL, STAGES } from "../shared/labels";
@@ -154,6 +155,37 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: "object", properties: { noi_dung: { type: "string" } }, required: ["noi_dung"] },
   },
   {
+    name: "xem_kenh_video",
+    description: "Xem kênh video “Tiệm nói thật” (phun xăm, nhân vật AI): cài đặt, các dạng video, nhân vật, danh sách video theo lô và trạng thái kiểm duyệt.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "de_xuat_video_kenh",
+    description:
+      "Tạo ĐỀ XUẤT video mới cho kênh “Tiệm nói thật” (chờ duyệt). Luật: phim tình huống tại tiệm phun xăm, hài trước, câu cuối là câu nói thật của thợ; 2 clip 15 giây, mỗi clip 33–38 từ (5 lượt lời thì tối đa 30 từ), mỗi câu dưới 12 từ; dạng A khách đòi thợ từ chối, B ca khó nói thật, C giải nghề (Phụ Tá hỏi), D chuyện tiệm; không nêu giá, ưu đãi, không hứa kết quả, không dùng “nhất”, không trước/sau, không tiêm tê, không tên người/tiệm/kênh có thật, không chê ngoại hình; chỉ dùng nhân vật của kênh (Thợ Chính, Phụ Tá, Khách Mê Ảnh Mạng, Cô Dâu Vội, Chị Mày Hỏng, Anh Văn Phòng, Cô U58). Câu chuyên môn sẽ tự đánh dấu chờ thợ duyệt.",
+    input_schema: {
+      type: "object",
+      properties: {
+        dang: { type: "string", enum: ["A", "B", "C", "D"] },
+        ma_video: { type: "string", description: "Mã video ý tưởng đã có trong lô (ví dụ A2) nếu viết kịch bản cho ý tưởng đó" },
+        tieu_de: { type: "string", description: "Tên tập ngắn" },
+        tieu_de_do: { type: "string", description: "Tiêu đề đỏ trên video, tối đa 40 ký tự" },
+        tinh_huong: { type: "string" },
+        nhan_vat: { type: "array", items: { type: "string" } },
+        clips: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: { loi: { type: "array", items: { type: "object", properties: { nguoi: { type: "string" }, cau: { type: "string" } }, required: ["nguoi", "cau"] } } },
+            required: ["loi"],
+          },
+        },
+        caption: { type: "string" },
+      },
+      required: ["dang", "tieu_de", "tinh_huong", "clips"],
+    },
+  },
+  {
     name: "de_xuat_giao_viec",
     description: "Tạo ĐỀ XUẤT giao việc (chờ quản lý duyệt, chưa thực hiện). Hạn hoàn thành dạng YYYY-MM-DDTHH:mm theo giờ Việt Nam.",
     input_schema: {
@@ -275,6 +307,59 @@ async function execTool(ctx: Ctx, name: string, input: any): Promise<ToolResult>
       if (!ctx.can("assistant.use")) return { content: JSON.stringify({ loi: "Không có quyền." }) };
       const hits = await brainSearch(ctx, String(input?.noi_dung ?? "").slice(0, 200), "coordinator", 5);
       return { content: JSON.stringify({ so_muc: hits.length, muc: hits.map((h) => ({ loai: BRAIN_KIND_LABEL[h.kind] ?? h.kind, tieu_de: h.label, noi_dung: h.body.slice(0, 400) })) }) };
+    }
+    case "xem_kenh_video": {
+      if (!ctx.can("marketing.view")) return { content: JSON.stringify({ loi: "Không có quyền xem hệ thống marketing." }) };
+      const chId = await ensureMarketing(ctx);
+      if (!chId) return { content: JSON.stringify({ loi: "Chưa có kênh nội dung." }) };
+      const ch = await one<any>("SELECT name, platform, status, settings, formats FROM mkt_channels WHERE id=$1", [chId]);
+      const chars = await q<any>("SELECT name, status FROM mkt_characters WHERE channel_id=$1", [chId]);
+      const vids = await q<any>("SELECT v.code, v.title, v.format, v.status, b.code AS batch, jsonb_array_length(v.script) AS clips FROM mkt_videos v LEFT JOIN mkt_batches b ON b.id=v.batch_id WHERE v.channel_id=$1 ORDER BY b.code, v.code", [chId]);
+      return {
+        content: JSON.stringify({
+          kenh: ch?.name,
+          nen_tang: ch?.platform,
+          cai_dat: ch?.settings,
+          dang_video: (ch?.formats ?? []).map((f: any) => `${f.key} ${f.name} (${f.weight}%)`),
+          nhan_vat: chars.map((c) => `${c.name}${c.status === "CREATED" ? "" : " (chưa tạo trên Flow)"}`),
+          video: vids.map((v) => ({ ma: v.code, ten: v.title, dang: FORMAT_LABEL[v.format], lo: v.batch, trang_thai: VIDEO_STATUS_LABEL[v.status], co_kich_ban: v.clips > 0 })),
+        }),
+      };
+    }
+    case "de_xuat_video_kenh": {
+      if (!ctx.can("marketing.manage")) return { content: JSON.stringify({ loi: "Người dùng không có quyền đề xuất video cho kênh." }) };
+      const chId = await ensureMarketing(ctx);
+      if (!chId) return { content: JSON.stringify({ loi: "Chưa có kênh nội dung." }) };
+      const clips: ScriptClip[] = markExpert(
+        (Array.isArray(input?.clips) ? input.clips : []).slice(0, 3).map((c: any, i: number) => ({
+          name: `T${i + 1}`,
+          lines: (Array.isArray(c?.loi) ? c.loi : []).slice(0, 8).map((l: any) => ({ speaker: String(l?.nguoi ?? "").slice(0, 30), text: String(l?.cau ?? "").slice(0, 200) })),
+        })),
+      );
+      if (!clips.length || clips.some((c) => !c.lines.length)) return { content: JSON.stringify({ loi: "Thiếu lời thoại cho clip." }) };
+      let caption = String(input?.caption ?? "").trim().slice(0, 400);
+      if (!/tạo bằng AI|do AI tạo/i.test(caption)) caption = `${caption}${caption ? "\n" : ""}Tình huống minh hoạ, video tạo bằng AI.`;
+      const headline = String(input?.tieu_de_do ?? input?.tieu_de ?? "").slice(0, 60);
+      const checks = checkScript({ headline, clips, caption });
+      if (checks.some((c) => c.level === "block")) return { content: JSON.stringify({ loi: "Kịch bản vi phạm luật kênh, hãy viết lại.", kiem_tra: checks }) };
+      const title = String(input?.tieu_de ?? "Ý tưởng mới").slice(0, 120);
+      const existing = input?.ma_video ? await one<any>("SELECT id, code, status FROM mkt_videos WHERE channel_id=$1 AND upper(code)=upper($2)", [chId, String(input.ma_video)]) : null;
+      try {
+        const r = await createProposal(ctx, {
+          action_type: "VIDEO_IDEA",
+          summary: existing ? `Viết kịch bản cho video ${existing.code} “${title}” kênh Tiệm nói thật` : `Thêm video dạng ${input?.dang} “${title}” vào lô kế hoạch kênh Tiệm nói thật`,
+          payload: { channel_id: chId, video_id: existing?.id ?? null, format: input?.dang, title, headline, situation: String(input?.tinh_huong ?? "").slice(0, 400), characters: Array.isArray(input?.nhan_vat) ? input.nhan_vat.slice(0, 4) : [], clips, caption, hashtags: "#phunxamthammy #phunmay" },
+          reason: `Đề xuất từ khung chat. Kiểm luật: ${checks.map((c) => c.text).join(" ")}`.slice(0, 600),
+          source_refs: [{ type: "channel", id: chId, label: "Kênh Tiệm nói thật", href: "/marketing" }],
+          requested_label: `${ctx.actorLabel} (qua trợ lý AI)`,
+          before: { note: "Chưa có trong lô" },
+          after: { title, headline, clips, checks },
+          agent: "channel",
+        });
+        return { content: JSON.stringify({ ok: true, ma_de_xuat: r.code, trang_thai: "Chờ duyệt", kiem_tra: checks }), actions: [{ type: "proposal", id: r.id, label: `${r.code} · Video “${title}”`, href: `/approvals?open=${r.id}` }] };
+      } catch (e: any) {
+        return { content: JSON.stringify({ loi: e?.message ?? "Không tạo được đề xuất." }) };
+      }
     }
     case "de_xuat_giao_viec": {
       if (!ctx.can("tasks.create")) return { content: JSON.stringify({ loi: "Người dùng không có quyền đề xuất giao việc." }) };

@@ -1,13 +1,13 @@
 "use client";
 import React, { useState } from "react";
 import Link from "next/link";
-import { Activity, Bot, Brain, Cpu, FileChartColumn, GraduationCap, Heart, OctagonPause, Play, PlayCircle, ShieldCheck, Sparkles, TriangleAlert, Users, Zap } from "lucide-react";
+import { Activity, Bot, Brain, Clapperboard, Cpu, FileChartColumn, GraduationCap, Heart, OctagonPause, Play, PlayCircle, ShieldCheck, Sparkles, TriangleAlert, Users, Zap } from "lucide-react";
 import { api, useApi } from "@/lib/client/api";
 import { Badge, Drawer, Empty, PageHead, PageState, Stat, useAction, useApp } from "@/components/ui";
 import { ChatPanel } from "@/components/AgentChat";
 import { fmtDateTime, relativeDay, fmtTime } from "@/lib/shared/format";
 
-const ICON: Record<string, React.ElementType> = { Sparkles, Users, Heart, FileChartColumn, GraduationCap };
+const ICON: Record<string, React.ElementType> = { Sparkles, Users, Heart, FileChartColumn, GraduationCap, Clapperboard };
 const TRIGGER: Record<string, string> = { manual: "Chạy tay", chat: "Từ khung chat", schedule: "Theo lịch" };
 const RUN_TONE: Record<string, string> = { SUCCEEDED: "green", FAILED: "red", SKIPPED: "gray", RUNNING: "blue" };
 const RUN_LABEL: Record<string, string> = { SUCCEEDED: "Hoàn tất", FAILED: "Lỗi", SKIPPED: "Bỏ qua", RUNNING: "Đang chạy" };

@@ -1,6 +1,6 @@
 # PMU OS — Hệ điều hành vận hành có AI Agent cho doanh nghiệp dịch vụ PMU
 
-Phần mềm quản trị nhân sự và chăm sóc khách hàng cho doanh nghiệp dịch vụ PMU (phun mày, môi, mí), có **đội AI Agent** làm việc bên trong: tự quét dữ liệu, tra **Bộ não thứ 2**, soạn sẵn trả lời Zalo và đề xuất giao việc. Mọi đề xuất đều chờ con người duyệt trước khi thực hiện.
+Phần mềm quản trị nhân sự, chăm sóc khách hàng và marketing cho doanh nghiệp dịch vụ PMU (phun mày, môi, mí), có **đội AI Agent** làm việc bên trong: tự quét dữ liệu, tra **Bộ não thứ 2**, soạn sẵn trả lời Zalo, đề xuất giao việc, và **Agent Xây kênh** vận hành kênh video “Tiệm nói thật” (lô video, kiểm duyệt, phễu). Mọi đề xuất đều chờ con người duyệt trước khi thực hiện.
 
 **Dùng thử ngay:** https://pmu-os-xi.vercel.app → bấm **Khám phá bản demo** (không cần tài khoản).
 
@@ -61,6 +61,7 @@ Câu mẫu:
 | **Agent Chăm sóc khách** | Lịch chưa xác nhận, tin Zalo chưa trả lời, phản hồi cần chuyên viên | Đề xuất giao việc gọi xác nhận, bản trả lời theo FAQ đã duyệt, insight ý định khách |
 | **Agent Báo cáo** | Tổng hợp số liệu cuối ngày | Báo cáo nháp có nguồn, mốc dữ liệu, phần chưa chắc chắn |
 | **Agent Đào tạo SOP** | Bài học SOP sắp hạn, SOP chờ duyệt | Đề xuất giao việc học, không tự xuất bản tài liệu |
+| **Agent Xây kênh** | Kênh video “Tiệm nói thật”: lô video, kiểm duyệt, câu chuyên môn, phễu | Giao thợ thật duyệt câu chuyên môn, đề xuất quyết định kênh, đề xuất lịch đăng video đã duyệt |
 
 Bật/tắt từng agent, **dừng khẩn cấp** toàn hệ, xem nhật ký từng lượt chạy (agent đã tra gì trong Bộ não, tạo đề xuất nào, tự làm gì). Agent không tạo đề xuất trùng khi chạy lại.
 
@@ -109,7 +110,33 @@ Tổng quan · Nhân sự · Lịch làm việc · Công việc (checklist, nộ
 | --- | --- |
 | ![Lịch làm việc](docs/images/12-lich-lam-viec.jpg) | <img src="docs/images/13-dien-thoai.jpg" alt="Giao diện điện thoại" width="300"> |
 
-### 9. An toàn và kiểm soát
+### 9. Hệ thống Marketing, Phễu, Đề xuất xây kênh
+
+Agent Xây kênh mang vào phần mềm toàn bộ cách làm kênh **“Tiệm nói thật”**: phim tình huống 20 đến 35 giây tại một tiệm phun xăm, nhân vật hư cấu do AI tạo trên Google Flow, luật “hài trước, thật sau”, dựa trên số đo 58 kênh phun xăm, 31.679 video.
+
+- **Hệ thống Marketing:**
+  - Dây chuyền 8 chặng: Ý tưởng → Có kịch bản → Đã quay & dựng → Chờ kiểm duyệt → Cần sửa → Đã duyệt → Đã xếp lịch → Đã đăng.
+  - **Lô video** có trình phát ngay trong phần mềm.
+  - **Kiểm duyệt**: máy kiểm luật kịch bản, bảng kiểm bắt buộc (nghe giọng, khớp miệng, nhãn AI, không trước/sau, không hứa kết quả), câu chuyên môn phải có thợ thật duyệt.
+  - Nhân vật AI và luật kênh, căn cứ pháp lý tham chiếu.
+- **Phễu:** 8 chặng hành trình khách từ Quan tâm tới Quay lại/giới thiệu, tỷ lệ chuyển, điểm nghẽn, theo nguồn khách, dạng nội dung nuôi từng chặng.
+- **Đề xuất xây kênh:** kế hoạch kênh (concept, bằng chứng số đo, tỷ trọng dạng video, lộ trình, việc cần chuẩn bị, cách đo) và **việc chờ Sếp chốt** (giọng vùng miền, tốc độ dựng, tạo nhân vật, giao thợ duyệt), duyệt ngay tại chỗ.
+- **Nhập lô mới từ máy:** video mới do skill dựng xong được nhập vào phần mềm bằng một nút, vào hàng kiểm duyệt.
+- **Trợ lý chat** viết được kịch bản cho ý tưởng trong lô (ví dụ “Viết kịch bản video A2 cô dâu vội”), tự kiểm luật kênh rồi tạo đề xuất chờ duyệt.
+
+> File video thật chỉ phát trên máy của chủ doanh nghiệp, cho người đã đăng nhập; không nằm trong mã nguồn hay trên máy chủ công khai, vì đây là bản thử chưa duyệt. Ảnh dưới đây đã che khung hình video.
+
+![Lô video](docs/images/14-marketing-lo-video.jpg)
+
+| Dây chuyền sản xuất | Kiểm duyệt video |
+| --- | --- |
+| ![Dây chuyền sản xuất](docs/images/15-marketing-day-chuyen.jpg) | ![Kiểm duyệt video](docs/images/16-kiem-duyet-video.jpg) |
+
+| Phễu khách hàng | Đề xuất xây kênh |
+| --- | --- |
+| ![Phễu](docs/images/17-pheu-khach-hang.jpg) | ![Đề xuất xây kênh](docs/images/18-de-xuat-xay-kenh.jpg) |
+
+### 10. An toàn và kiểm soát
 
 - Phân quyền kiểm tại máy chủ theo module × hành động; tách dữ liệu từng doanh nghiệp, từng chi nhánh.
 - AI chỉ thấy dữ liệu trong phạm vi quyền của người dùng; nội dung tin nhắn, tài liệu được coi là dữ liệu, không phải mệnh lệnh.
@@ -155,6 +182,7 @@ Tạo file `.env.local` (đã có mẫu `.env.example`, không chứa secret):
 | `ANTHROPIC_API_KEY` | Không | Bật Claude cho khung chat giao việc qua API (tính tiền theo token). |
 | `AI_BRAIN` | Không | `claude-cli` để dùng Claude CLI trên máy cá nhân; `rules` để ép chế độ quy tắc. |
 | `CLAUDE_CLI_PATH` | Không | Đường dẫn Claude CLI nếu không tự tìm thấy. |
+| `MARKETING_MEDIA_DIR` | Không | Thư mục chứa video của kênh trên máy (mặc định `~/Documents/TIEM-NOI-THAT` khi chạy local). Không đặt trên máy chủ công khai. |
 
 ---
 
@@ -193,7 +221,7 @@ Migration SQL trong `db/migrations` được nhúng vào mã lúc build và tự
 BASE_URL=http://localhost:3730 npm run test:ac
 ```
 
-22 kiểm tra tự động: AC01–AC09, AC11, AC12 (phạm vi dữ liệu, giao việc, đặt lịch trùng đồng thời, chống lặp, AI có nguồn, duyệt hai lần, rút đồng ý, Zalo chưa kết nối, báo cáo có nguồn, không lộ secret) và AG01–AG07 cho hệ AI Agent (chống đề xuất trùng, dừng khẩn cấp, chat giao việc, phân quyền agent, Bộ não chỉ dùng mục đã duyệt, 20 hội thoại Zalo, tin đến → agent xử lý). Chi tiết: [docs/NGHIEM-THU.md](docs/NGHIEM-THU.md).
+25 kiểm tra tự động: AC01–AC09, AC11, AC12 (phạm vi dữ liệu, giao việc, đặt lịch trùng đồng thời, chống lặp, AI có nguồn, duyệt hai lần, rút đồng ý, Zalo chưa kết nối, báo cáo có nguồn, không lộ secret) và AG01–AG07 cho hệ AI Agent (chống đề xuất trùng, dừng khẩn cấp, chat giao việc, phân quyền agent, Bộ não chỉ dùng mục đã duyệt, 20 hội thoại Zalo, tin đến → agent xử lý) và AG08–AG10 cho hệ marketing (lô video và phát video có đăng nhập, kiểm duyệt và lịch đăng, đề xuất xây kênh và phễu). Chi tiết: [docs/NGHIEM-THU.md](docs/NGHIEM-THU.md).
 
 ---
 
@@ -204,7 +232,7 @@ BASE_URL=http://localhost:3730 npm run test:ac
 
 ```
 src/
-  app/(app)/            các màn hình: dashboard, agents, brain, people, shifts, tasks, performance,
+  app/(app)/            các màn hình: dashboard, agents, brain, marketing, funnel, channels, people, shifts, tasks, performance,
                         knowledge, customers, inbox, appointments, care, reports, assistant, approvals, settings
   components/
     AgentPipeline.tsx   luồng AI Agent trên Tổng quan
@@ -214,12 +242,13 @@ src/
     agents.ts           4 agent chuyên trách + chống trùng đề xuất
     agent-chat.ts       trợ lý giao việc: Claude API / Claude CLI / quy tắc, công cụ theo quyền
     brain.ts            Bộ não thứ 2: tra cứu, ghi bài học chờ duyệt, đếm ý định khách
+    marketing.ts        kênh Tiệm nói thật, kiểm luật kịch bản, nhập lô từ máy, phễu
     proposals.ts        đề xuất, phê duyệt, thực thi đúng một lần
     generator.ts        sinh DỮ LIỆU MÔ PHỎNG dày (2 chi nhánh, 22 nhân sự, 560 khách)
     scenarios.ts        20 kịch bản hội thoại Zalo + nội dung khởi tạo Bộ não
     routes/*.ts         API theo phân hệ
   lib/shared/perms.ts   ma trận quyền module × hành động
-db/migrations/          001 lược đồ gốc · 002 agent · 003 Bộ não thứ 2
+db/migrations/          001 lược đồ gốc · 002 agent · 003 Bộ não thứ 2 · 004 marketing
 scripts/ac-test.mjs     kiểm thử nghiệm thu
 docs/                   kiến trúc, nghiệm thu, ảnh hướng dẫn
 public/design/          16 ảnh thiết kế gốc (xem trong app tại /thiet-ke)
@@ -232,6 +261,7 @@ Chi tiết quyết định thiết kế: [docs/KIEN-TRUC.md](docs/KIEN-TRUC.md).
 ## Giới hạn hiện tại
 
 - Kênh Zalo chưa kết nối: tin gửi khách chỉ ở trạng thái bản nháp / chờ duyệt / gửi thủ công và ghi nhận.
+- Chưa nối TikTok/Reels: “xếp lịch đăng” chỉ ghi lịch, người phụ trách đăng thủ công; chưa có số view thật trong phễu.
 - Agent “chạy theo lịch” chỉ chạy khi có người mở màn Tổng quan (Vercel không có tiến trình nền liên tục).
 - Chưa có sao lưu / khôi phục tự động và giám sát lỗi (AC13).
 - Chưa gửi email (mời thành viên, quên mật khẩu báo rõ là chưa gửi).

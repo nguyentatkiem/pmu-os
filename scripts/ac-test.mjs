@@ -101,7 +101,8 @@ async function main() {
   const t1 = await A.post("/agents/hr/run");
   const t2 = await A.get("/brain");
   const t3 = await A.get("/agents/pipeline");
-  ok("AG04", "Nhân viên không chạy được agent, không xem Bộ não và luồng agent", [t1, t2, t3].every((r) => r.status === 403), [t1, t2, t3].map((r) => r.status).join(","));
+  const t4 = await A.get("/marketing");
+  ok("AG04", "Nhân viên không chạy được agent, không xem Bộ não, luồng agent, hệ thống marketing", [t1, t2, t3, t4].every((r) => r.status === 403), [t1, t2, t3, t4].map((r) => r.status).join(","));
   await A.as("Quản trị hệ thống (demo)");
   const r9 = await A.get("/customers");
   ok("AC01", "Quản trị hệ thống không tự có quyền xem dữ liệu khách", r9.status === 403, `status=${r9.status}`);
@@ -290,9 +291,53 @@ async function main() {
   const pipe = (await A.get("/agents/pipeline")).data;
   ok(
     "AG07",
-    "Tin Zalo mô phỏng đến → Agent CSKH tra Bộ não và soạn/chuyển; Tổng quan hiện đủ 4 làn agent",
-    sim.status === 200 && sim.data.run.status === "SUCCEEDED" && pipe.lanes.length === 4 && pipe.feed.length > 0,
+    "Tin Zalo mô phỏng đến → Agent CSKH tra Bộ não và soạn/chuyển; Tổng quan hiện đủ 5 làn agent",
+    sim.status === 200 && sim.data.run.status === "SUCCEEDED" && pipe.lanes.length === 5 && pipe.feed.length > 0,
     `khách=${sim.data?.customer}, soạn sẵn=${sim.data?.draft ? "có" : "chuyển chuyên viên"}, làn=${pipe.lanes.length}`,
+  );
+
+  // AG08 — Hệ thống Marketing: kênh, lô video, phát video
+  const M = await new Client().demo();
+  const mk = (await M.get("/marketing")).data;
+  const vA1 = mk.batches.flatMap((b) => b.videos).find((v) => v.code === "A1");
+  const vres = await fetch(`${BASE}/api/media/video/${vA1.id}`, { headers: { cookie: M.cookie, range: "bytes=0-1023" } });
+  const anon = await fetch(`${BASE}/api/media/video/${vA1.id}`);
+  ok(
+    "AG08",
+    "Hệ thống Marketing: kênh Tiệm nói thật, 2 lô, 3 video bản thử chờ kiểm duyệt; video chỉ phát cho người đã đăng nhập",
+    mk.channel?.name === "Tiệm nói thật" && mk.batches.length >= 2 && mk.stats.in_review === 3 && (mk.media.available ? vres.status === 206 : vres.status === 404) && anon.status === 401,
+    `lô=${mk.batches.length}, chờ duyệt=${mk.stats.in_review}, phát video=${vres.status} (${mk.media.available ? "có file trên máy" : "máy chủ không có file"}), chưa đăng nhập=${anon.status}`,
+  );
+
+  // AG09 — Kiểm duyệt video và lịch đăng
+  const CHK = { listened: true, lipsync: true, ai_label: true, no_before_after: true, no_promise: true, no_body_shaming: true };
+  const r1v = await M.post(`/marketing/videos/${vA1.id}/review`, { decision: "APPROVE", checklist: {} });
+  const r2v = await M.post(`/marketing/videos/${vA1.id}/review`, { decision: "APPROVE", checklist: CHK });
+  await M.post(`/marketing/videos/${vA1.id}/expert`, { technician: "Thợ kiểm thử" });
+  const r3v = await M.post(`/marketing/videos/${vA1.id}/review`, { decision: "APPROVE", checklist: CHK });
+  const chRun = (await M.post("/agents/channel/run")).data;
+  const pub = chRun.proposals.find((p) => p.summary.includes("A1"));
+  const apv = pub ? await M.post(`/approvals/${pub.id}/approve`, { reason: "ok" }) : null;
+  const vAfter = (await M.get(`/marketing/videos/${vA1.id}`)).data.video;
+  ok(
+    "AG09",
+    "Kiểm duyệt: thiếu checklist chặn, câu chuyên môn chưa thợ duyệt chặn, đủ thì duyệt; Agent Xây kênh đề xuất lịch đăng, duyệt xong video vào lịch",
+    r1v.status === 400 && r2v.status === 409 && r3v.status === 200 && !!pub && apv?.data?.status === "EXECUTED" && vAfter.status === "SCHEDULED",
+    `thiếu checklist=${r1v.status}, chưa thợ duyệt=${r2v.status}, duyệt=${r3v.status}, đề xuất lịch=${pub?.code ?? "-"}, trạng thái=${vAfter.status}`,
+  );
+
+  // AG10 — Đề xuất xây kênh và phễu
+  const chn = (await M.get("/marketing/channel")).data;
+  const giong = chn.proposals.find((p) => p.status === "PENDING" && p.summary.includes("giọng"));
+  const dec = await M.post(`/approvals/${giong.id}/approve`, { reason: "ok" });
+  const chn2 = (await M.get("/marketing/channel")).data;
+  const fun = (await M.get("/marketing/funnel")).data;
+  const desc = fun.stages.every((s2, i) => i === 0 || s2.count <= fun.stages[i - 1].count);
+  ok(
+    "AG10",
+    "Đề xuất xây kênh: duyệt quyết định giọng thì kế hoạch kênh cập nhật; phễu 8 chặng giảm dần, có điểm nghẽn",
+    dec.data?.status === "EXECUTED" && chn2.channel.settings.giong === "Miền Bắc" && fun.stages.length === 8 && desc && !!fun.bottleneck,
+    `giọng=${chn2.channel.settings.giong}, phễu=${fun.stages.map((x) => x.count).join("/")}, nghẽn=${fun.bottleneck?.from}→${fun.bottleneck?.to}`,
   );
 
   const pass = results.filter((r) => r.pass).length;

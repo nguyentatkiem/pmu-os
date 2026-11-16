@@ -7,7 +7,7 @@ import { AGENTS, AGENT_NAME, runAgent } from "../agents";
 import { agentChat, aiStatus } from "../agent-chat";
 import { addDays, vnDayKey, vnToDate } from "../../shared/format";
 
-const LANES = ["hr", "care", "sop", "report"];
+const LANES = ["hr", "care", "sop", "report", "channel"];
 const SCHEDULE_MIN = 60;
 const SIM_INQ = [
   "Chào em, chiều mai chị muốn qua tư vấn phun mày được không?",
@@ -123,7 +123,8 @@ export const routes: RouteDef[] = [
           (SELECT count(*)::int FROM appointments WHERE tenant_id=$1 AND branch_id = ANY($2) AND status='PENDING' AND start_at >= $4 AND start_at < $5) AS appt_pending,
           (SELECT count(*)::int FROM tasks WHERE tenant_id=$1 AND branch_id = ANY($2) AND status IN ('TODO','IN_PROGRESS') AND due_at < $3) AS overdue,
           (SELECT count(*)::int FROM feedback f JOIN customers c ON c.id=f.customer_id WHERE f.tenant_id=$1 AND c.branch_id = ANY($2) AND f.status='OPEN' AND f.needs_specialist) AS feedback_open,
-          (SELECT count(*)::int FROM learning_assignments la JOIN employees e ON e.id=la.employee_id WHERE la.tenant_id=$1 AND e.branch_id = ANY($2) AND la.status='ASSIGNED' AND la.due_at <= $6) AS learning_due`,
+          (SELECT count(*)::int FROM learning_assignments la JOIN employees e ON e.id=la.employee_id WHERE la.tenant_id=$1 AND e.branch_id = ANY($2) AND la.status='ASSIGNED' AND la.due_at <= $6) AS learning_due,
+          (SELECT count(*)::int FROM mkt_videos WHERE tenant_id=$1 AND status IN ('IN_REVIEW','REVISE')) AS video_review`,
         [ctx.tenantId, ctx.branchFilter, now, vnToDate(tomorrow), vnToDate(addDays(tomorrow, 1)), new Date(now.getTime() + 3 * 86400000)],
       );
       const [br] = await q<any>(

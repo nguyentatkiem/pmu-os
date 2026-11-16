@@ -21,12 +21,13 @@ import {
   Zap,
   Loader2,
   X,
+  Clapperboard,
 } from "lucide-react";
 import { api } from "@/lib/client/api";
 import { useApp, useToast } from "./ui";
 import { fmtTime, relativeDay } from "@/lib/shared/format";
 
-const ICON: Record<string, React.ElementType> = { Users, Heart, FileChartColumn, GraduationCap };
+const ICON: Record<string, React.ElementType> = { Users, Heart, FileChartColumn, GraduationCap, Clapperboard };
 const STAGES: [string, string][] = [
   ["scan", "Quét dữ liệu"],
   ["brain", "Tra Bộ não"],
@@ -134,6 +135,7 @@ export default function AgentPipeline() {
     [TriangleAlert, s.overdue, "Việc quá hạn", "/tasks?filter=overdue", s.overdue > 0],
     [Heart, s.feedback_open, "Phản hồi cần chuyên viên", "/care", s.feedback_open > 0],
     [GraduationCap, s.learning_due, "Bài học SOP sắp hạn", "/knowledge", s.learning_due > 0],
+    [Clapperboard, s.video_review ?? 0, "Video chờ kiểm duyệt", "/marketing?tab=review", (s.video_review ?? 0) > 0],
   ];
 
   return (

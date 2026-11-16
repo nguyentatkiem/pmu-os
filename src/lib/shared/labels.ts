@@ -117,6 +117,9 @@ export const PROPOSAL_TYPE_LABEL: Record<string, string> = {
   CUSTOMER_MESSAGE: "Nội dung gửi khách",
   CARE_MESSAGE: "Nội dung chăm sóc",
   SOP_PUBLISH: "Xuất bản SOP",
+  CHANNEL_DECISION: "Quyết định kênh",
+  VIDEO_IDEA: "Ý tưởng video",
+  VIDEO_PUBLISH: "Xếp lịch đăng video",
 };
 export const PROPOSAL_STATUS_LABEL: Record<string, string> = {
   PENDING: "Chờ duyệt",

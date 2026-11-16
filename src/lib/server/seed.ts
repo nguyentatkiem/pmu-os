@@ -4,6 +4,7 @@ import { addDays, vnDayKey } from "../shared/format";
 import { buildReportContent } from "./ai";
 import { generateBusiness } from "./generator";
 import { seedBrain, seedZaloScenarios } from "./scenarios";
+import { seedMarketing } from "./marketing";
 
 export const DEMO_NOW_ISO = "2026-11-15T10:30:00Z"; // 17:30 ngày 15/11/2026 giờ Việt Nam
 
@@ -95,6 +96,7 @@ export async function seedDemoTenant() {
     const r = await generateBusiness(qq, { tenantId, now: demoNow, mode: "DEMO" });
     await seedZaloScenarios(qq, tenantId, demoNow);
     await seedBrain(qq, tenantId, demoNow);
+    await seedMarketing(qq, tenantId, demoNow);
     await addReports(qq, tenantId, r.branchIds, demoNow, r.ownerUserId);
     return { tenantId, ownerUserId: r.ownerUserId };
   });
@@ -114,6 +116,7 @@ export async function seedRealTenant(tenantId: string) {
     const r = await generateBusiness(qq, { tenantId, now, mode: "REAL", ownerUserId: owner.user_id, existingBranchId: branch.id, seed: 7301 });
     await seedZaloScenarios(qq, tenantId, now);
     await seedBrain(qq, tenantId, now);
+    await seedMarketing(qq, tenantId, now);
     await addReports(qq, tenantId, r.branchIds, now, owner.user_id);
     const settings = { ...DEFAULT_SETTINGS, ...(t.settings ?? {}), simulated_data: true, simulated_seeded: true, simulated_cleared: false };
     await qq("UPDATE tenants SET settings=$2::jsonb, updated_at=now(), version=version+1 WHERE id=$1", [tenantId, j(settings)]);
@@ -122,6 +125,11 @@ export async function seedRealTenant(tenantId: string) {
 }
 
 const BUSINESS_TABLES = [
+  "mkt_reviews",
+  "mkt_videos",
+  "mkt_batches",
+  "mkt_characters",
+  "mkt_channels",
   "brain_lookups",
   "brain_notes",
   "ai_messages",

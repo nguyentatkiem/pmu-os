@@ -34,6 +34,11 @@ import {
   UserRound,
   Users,
   Workflow,
+  Lightbulb,
+  Clapperboard,
+  Film,
+  Funnel,
+  Megaphone,
 } from "lucide-react";
 
 type Step = { icon: React.ElementType; label: string; sub: string; ai?: boolean };
@@ -187,6 +192,39 @@ export const FLOWS: Record<string, Flow> = {
       { icon: BadgeCheck, label: "Quản lý duyệt", sub: "Chỉ mục duyệt mới dùng" },
       { icon: Brain, label: "Bộ não thứ 2", sub: "Quy tắc, ghi nhớ, FAQ, SOP" },
       { icon: Sparkles, label: "Agent dùng khi làm", sub: "Trích dẫn nguồn", ai: true },
+    ],
+  },
+  "/marketing": {
+    title: "Dây chuyền video kênh Tiệm nói thật",
+    steps: [
+      { icon: Lightbulb, label: "Ý tưởng", sub: "Agent đề xuất theo vòng A, D, B, C", ai: true },
+      { icon: PenLine, label: "Kịch bản", sub: "Máy kiểm luật kênh", ai: true },
+      { icon: Film, label: "Quay & dựng", sub: "Google Flow + công cụ dựng", ai: true },
+      { icon: BadgeCheck, label: "Kiểm duyệt", sub: "Nghe giọng, thợ duyệt câu chuyên môn" },
+      { icon: CalendarCheck, label: "Xếp lịch đăng", sub: "06:00–07:00, riêng tư trước" },
+      { icon: Funnel, label: "Đo vào phễu", sub: "Tin Zalo, khách nguồn TikTok" },
+    ],
+  },
+  "/funnel": {
+    title: "Phễu khách hàng",
+    steps: [
+      { icon: Clapperboard, label: "Xem nội dung", sub: "Dạng D kéo người mới" },
+      { icon: MessageCircle, label: "Quan tâm, nhắn Zalo", sub: "Agent CSKH trả lời sẵn", ai: true },
+      { icon: Users, label: "Tư vấn", sub: "Dạng A, B, C xây niềm tin" },
+      { icon: CalendarClock, label: "Đặt lịch", sub: "Agent giao gọi xác nhận", ai: true },
+      { icon: Sparkles, label: "Dịch vụ", sub: "Kết quả thật của tiệm" },
+      { icon: Heart, label: "Chăm sóc, quay lại", sub: "Dặm màu, giới thiệu" },
+    ],
+  },
+  "/channels": {
+    title: "Xây một kênh nội dung",
+    steps: [
+      { icon: Search, label: "Quét kênh gốc", sub: "58 kênh, 31.679 video", ai: true },
+      { icon: Bot, label: "Agent lập kế hoạch", sub: "Concept, dạng, tỷ trọng", ai: true },
+      { icon: ShieldCheck, label: "Đề xuất chờ chốt", sub: "Giọng, tốc độ, nhân vật", ai: true },
+      { icon: BadgeCheck, label: "Sếp duyệt", sub: "Cập nhật kế hoạch kênh" },
+      { icon: Megaphone, label: "Chạy kênh", sub: "Lô video mỗi tuần" },
+      { icon: Funnel, label: "Đo và chỉnh", sub: "Sau 20 video" },
     ],
   },
   "/settings": {

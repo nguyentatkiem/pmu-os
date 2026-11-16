@@ -42,6 +42,7 @@ async function loadRoutes(): Promise<Compiled[]> {
     import("./routes/dashboard"),
     import("./routes/agents"),
     import("./routes/brain"),
+    import("./routes/marketing"),
   ]);
   compiled = mods
     .flatMap((m) => m.routes as RouteDef[])
